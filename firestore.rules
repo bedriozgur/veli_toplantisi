@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Functional prototype rules for a public event app.
+    // This allows browser-side publishing and parent progress sync.
+    // For stronger production security, replace this with auth or server-side writes.
+    match /events/{eventCode} {
+      allow read, write: if true;
+
+      match /progress/{studentId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}

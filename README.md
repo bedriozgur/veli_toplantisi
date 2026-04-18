@@ -40,23 +40,31 @@ npm install
 npm run build
 ```
 
-## Deploy to Vercel
-1. Push this folder to a GitHub repository.
-2. In Vercel, create a New Project and import that repo.
-3. Framework preset: Vite
-4. Build command: `npm run build`
-5. Output directory: `dist`
-6. In Vercel Project Settings, add these Environment Variables:
+## Deploy to Firebase Hosting + Firestore
+1. Create a Firebase project.
+2. Add a Firebase Web App inside that project.
+3. Enable Firestore Database.
+4. Create a local `.env` from `.env.example` and fill in:
    `VITE_FIREBASE_API_KEY`
    `VITE_FIREBASE_AUTH_DOMAIN`
    `VITE_FIREBASE_PROJECT_ID`
    `VITE_FIREBASE_APP_ID`
-7. Deploy
+5. Install the Firebase CLI:
+   `npm install -g firebase-tools`
+6. Log in:
+   `firebase login`
+7. Copy `.firebaserc.example` to `.firebaserc` and replace `your-firebase-project-id` with the real Firebase project id.
+8. Build the app:
+   `npm run build`
+9. Deploy Hosting and Firestore rules:
+   `firebase deploy`
 
-Vercel will auto-detect Vite in most cases.
+This repo already includes:
+- `firebase.json`
+- `firestore.rules`
+- `.firebaserc.example`
 
-## Vercel note
-Because this is a Vite app, the Firebase values must be added in Vercel as `VITE_...` environment variables so they are available in the browser build. Once the GitHub repository is connected, each push to the tracked branch will trigger a new deployment.
+The Hosting config is set up for a Vite single-page app and rewrites all routes to `index.html`.
 
 ## Recommended flow at the school entrance
 1. Set up teachers, classes, students, the notes recipient email, and the event code in the admin view.
@@ -68,3 +76,6 @@ Because this is a Vite app, the Firebase values must be added in Vercel as `VITE
 
 ## Important current limitation
 Admin editing is still browser-local unless you move to a fuller backend workflow. Firebase cloud mode in this version is focused on publishing the event, resolving the shared QR privacy problem, and syncing parent progress, not on collaborative admin editing.
+
+## Security note
+The included `firestore.rules` are intentionally permissive so the current browser-only admin publish flow works without authentication. That is acceptable for a prototype or limited internal event, but it is not strong enough for a hardened production school system. For stronger protection, move publishing behind Firebase Auth or a server-side function later.
