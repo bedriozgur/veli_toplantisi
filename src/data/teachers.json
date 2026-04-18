@@ -1,0 +1,142 @@
+[
+  {
+    "id": 1,
+    "name": "Deniz Sert",
+    "subject": "İngilizce",
+    "room": "LHZ/A",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 2,
+    "name": "Hande Hatipoğlu",
+    "subject": "Biyoloji",
+    "room": "LHZ/B",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 3,
+    "name": "Sema Tunç",
+    "subject": "Matematik",
+    "room": "9/A",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 4,
+    "name": "Cemre Nur Vardallı Ankara",
+    "subject": "Kimya",
+    "room": "9/B",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 5,
+    "name": "Sevda Bıyık",
+    "subject": "Türk Dili ve Edebiyatı",
+    "room": "9/C",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 6,
+    "name": "Figen Kılıç",
+    "subject": "Tarih",
+    "room": "10/B",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 7,
+    "name": "Ş. Burçak Dağlı",
+    "subject": "Fizik",
+    "room": "Fizik Lab.",
+    "floor": "Lise 1.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 8,
+    "name": "Mustafa Yavuz",
+    "subject": "Din Kültürü ve Ahlak Bilgisi",
+    "room": "11/A",
+    "floor": "Lise 2.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 9,
+    "name": "Yağmur Savaş Pekince",
+    "subject": "Almanca",
+    "room": "11/B",
+    "floor": "Lise 2.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 10,
+    "name": "Sharleen Suzann Padak",
+    "subject": "İngilizce",
+    "room": "12/A",
+    "floor": "Lise 2.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 11,
+    "name": "Celal Kartal",
+    "subject": "Coğrafya",
+    "room": "12/C",
+    "floor": "Lise 2.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 12,
+    "name": "Gizem Zeynep Kırçil",
+    "subject": "Fransızca",
+    "room": "12/D",
+    "floor": "Lise 2.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 13,
+    "name": "Nesip Fırat Nesipoğulları",
+    "subject": "Matematik",
+    "room": "12/D",
+    "floor": "Lise 2.Kat",
+    "time": "",
+    "status": "active",
+    "note": ""
+  },
+  {
+    "id": 14,
+    "name": "Tülin Temel",
+    "subject": "Beden Eğitimi ve Spor",
+    "room": "",
+    "floor": "",
+    "time": "",
+    "status": "unavailable",
+    "note": "İzinli"
+  }
+]

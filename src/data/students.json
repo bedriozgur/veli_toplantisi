@@ -1,0 +1,272 @@
+[
+  {
+    "id": 20101,
+    "child": "Eymen Yıldız",
+    "parent": "Murat Yıldız",
+    "cid": 201
+  },
+  {
+    "id": 20102,
+    "child": "Elif Su Kaya",
+    "parent": "Ayşe Kaya",
+    "cid": 201
+  },
+  {
+    "id": 20103,
+    "child": "Kerem Demir",
+    "parent": "Mehmet Demir",
+    "cid": 201
+  },
+  {
+    "id": 20104,
+    "child": "Zeynep Arslan",
+    "parent": "Fatma Arslan",
+    "cid": 201
+  },
+  {
+    "id": 20105,
+    "child": "Mert Can Şahin",
+    "parent": "Ali Şahin",
+    "cid": 201
+  },
+  {
+    "id": 20201,
+    "child": "Defne Aydın",
+    "parent": "Seda Aydın",
+    "cid": 202
+  },
+  {
+    "id": 20202,
+    "child": "Kaan Efe Koç",
+    "parent": "Hakan Koç",
+    "cid": 202
+  },
+  {
+    "id": 20203,
+    "child": "Mina Çelik",
+    "parent": "Gül Çelik",
+    "cid": 202
+  },
+  {
+    "id": 20204,
+    "child": "Yiğit Karaca",
+    "parent": "Emre Karaca",
+    "cid": 202
+  },
+  {
+    "id": 20205,
+    "child": "İpek Nur Yılmaz",
+    "parent": "Selin Yılmaz",
+    "cid": 202
+  },
+  {
+    "id": 20301,
+    "child": "Arda Özkan",
+    "parent": "Serkan Özkan",
+    "cid": 203
+  },
+  {
+    "id": 20302,
+    "child": "Nehir Aksoy",
+    "parent": "Büşra Aksoy",
+    "cid": 203
+  },
+  {
+    "id": 20303,
+    "child": "Doruk Tunç",
+    "parent": "Levent Tunç",
+    "cid": 203
+  },
+  {
+    "id": 20304,
+    "child": "Ece Naz Polat",
+    "parent": "Derya Polat",
+    "cid": 203
+  },
+  {
+    "id": 20305,
+    "child": "Bora Keskin",
+    "parent": "Onur Keskin",
+    "cid": 203
+  },
+  {
+    "id": 20401,
+    "child": "Ada Su Kılıç",
+    "parent": "Merve Kılıç",
+    "cid": 204
+  },
+  {
+    "id": 20402,
+    "child": "Atlas Erdem",
+    "parent": "Can Erdem",
+    "cid": 204
+  },
+  {
+    "id": 20403,
+    "child": "Lina Kurt",
+    "parent": "Pınar Kurt",
+    "cid": 204
+  },
+  {
+    "id": 20404,
+    "child": "Ömer Faruk Güneş",
+    "parent": "İsmail Güneş",
+    "cid": 204
+  },
+  {
+    "id": 20405,
+    "child": "Yaren Topal",
+    "parent": "Zehra Topal",
+    "cid": 204
+  },
+  {
+    "id": 21101,
+    "child": "Ahmet Eren Acar",
+    "parent": "Hasan Acar",
+    "cid": 211
+  },
+  {
+    "id": 21102,
+    "child": "Buse Nur Kaplan",
+    "parent": "Emine Kaplan",
+    "cid": 211
+  },
+  {
+    "id": 21103,
+    "child": "Can Berk Aslan",
+    "parent": "Volkan Aslan",
+    "cid": 211
+  },
+  {
+    "id": 21104,
+    "child": "Duru Yıldırım",
+    "parent": "Sevil Yıldırım",
+    "cid": 211
+  },
+  {
+    "id": 21105,
+    "child": "Emirhan Taş",
+    "parent": "Osman Taş",
+    "cid": 211
+  },
+  {
+    "id": 21201,
+    "child": "Eylül Özdemir",
+    "parent": "Nur Özdemir",
+    "cid": 212
+  },
+  {
+    "id": 21202,
+    "child": "Furkan Çetin",
+    "parent": "Yusuf Çetin",
+    "cid": 212
+  },
+  {
+    "id": 21203,
+    "child": "Gizem Sude Arı",
+    "parent": "Hale Arı",
+    "cid": 212
+  },
+  {
+    "id": 21204,
+    "child": "Hüseyin Alp Vural",
+    "parent": "Recep Vural",
+    "cid": 212
+  },
+  {
+    "id": 21205,
+    "child": "Irmak Korkmaz",
+    "parent": "Aylin Korkmaz",
+    "cid": 212
+  },
+  {
+    "id": 21301,
+    "child": "Batuhan Efe",
+    "parent": "Tuncay Efe",
+    "cid": 213
+  },
+  {
+    "id": 21302,
+    "child": "Ceren Işık",
+    "parent": "Aysel Işık",
+    "cid": 213
+  },
+  {
+    "id": 21303,
+    "child": "Deniz Naz Akın",
+    "parent": "Okan Akın",
+    "cid": 213
+  },
+  {
+    "id": 21304,
+    "child": "Eray Bulut",
+    "parent": "Rıza Bulut",
+    "cid": 213
+  },
+  {
+    "id": 21305,
+    "child": "Feyza Ünal",
+    "parent": "Şule Ünal",
+    "cid": 213
+  },
+  {
+    "id": 21401,
+    "child": "Gökhan Turan",
+    "parent": "Necati Turan",
+    "cid": 214
+  },
+  {
+    "id": 21402,
+    "child": "Helin Su Duran",
+    "parent": "Aslı Duran",
+    "cid": 214
+  },
+  {
+    "id": 21403,
+    "child": "İsmail Ege Çakır",
+    "parent": "Mustafa Çakır",
+    "cid": 214
+  },
+  {
+    "id": 21404,
+    "child": "Jale Nur Tekin",
+    "parent": "Figen Tekin",
+    "cid": 214
+  },
+  {
+    "id": 21405,
+    "child": "Kübra Karaman",
+    "parent": "Sibel Karaman",
+    "cid": 214
+  },
+  {
+    "id": 22101,
+    "child": "Levent Yüce",
+    "parent": "Bülent Yüce",
+    "cid": 221
+  },
+  {
+    "id": 22102,
+    "child": "Melisa Doğan",
+    "parent": "Esra Doğan",
+    "cid": 221
+  },
+  {
+    "id": 22103,
+    "child": "Nazlıcan Uçar",
+    "parent": "Suat Uçar",
+    "cid": 221
+  },
+  {
+    "id": 22104,
+    "child": "Oğuzhan Keleş",
+    "parent": "İrfan Keleş",
+    "cid": 221
+  },
+  {
+    "id": 22105,
+    "child": "Pelin Yağcı",
+    "parent": "Gonca Yağcı",
+    "cid": 221
+  }
+]
