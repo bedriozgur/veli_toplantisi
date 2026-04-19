@@ -184,6 +184,45 @@ export default function App() {
   const [pinDraft, setPinDraft] = useState("");
   const [pinError, setPinError] = useState("");
 
+  const openParentState = async (raw) => {
+    if (raw?.eventCode && raw?.studentId && cloudReady) {
+      const remoteEvent = await loadEvent(raw.eventCode);
+      if (!remoteEvent) throw new Error("Published event not found.");
+      const student = (remoteEvent.students || []).find((item) => item.id === raw.studentId);
+      if (!student) throw new Error("Student not found in event.");
+      const payload = buildParentPayload(remoteEvent, student);
+      const localProgress = loadParentMeetings(payload.keyId, payload.teachers);
+      const remoteProgress = await loadProgress(raw.eventCode, raw.studentId);
+      setPData(payload);
+      setMeetings(remoteProgress || localProgress);
+      setMode("parent");
+      return;
+    }
+
+    const safe = normalizeParentPayload(raw);
+    setPData(safe);
+    setMeetings(loadParentMeetings(safe.child || "parent", safe.teachers));
+    setMode("parent");
+  };
+
+  const openEntranceState = async (hash) => {
+    if (hash.startsWith("#eventCode=")) {
+      const code = decodeURIComponent(hash.slice(11)).toUpperCase();
+      if (!cloudReady) throw new Error("Firebase config is missing for this event link.");
+      const remoteEvent = await loadEvent(code);
+      if (!remoteEvent) throw new Error(`No event found for code ${code}.`);
+      setEntranceData(remoteEvent);
+      setMode("entrance");
+      return;
+    }
+
+    if (hash.startsWith("#event=")) {
+      const raw = dec(hash.slice(7));
+      setEntranceData(normalizeAdminState(raw));
+      setMode("entrance");
+    }
+  };
+
   useEffect(() => {
     const lk = document.createElement("link");
     lk.href =
@@ -196,42 +235,12 @@ export default function App() {
         const hash = window.location.hash || "";
 
         if (hash.startsWith("#p=")) {
-          const raw = dec(hash.slice(3));
-          if (raw?.eventCode && raw?.studentId && cloudReady) {
-            const remoteEvent = await loadEvent(raw.eventCode);
-            if (!remoteEvent) throw new Error("Published event not found.");
-            const student = (remoteEvent.students || []).find((s) => s.id === raw.studentId);
-            if (!student) throw new Error("Student not found in event.");
-            const payload = buildParentPayload(remoteEvent, student);
-            const localProgress = loadParentMeetings(payload.keyId, payload.teachers);
-            const remoteProgress = await loadProgress(raw.eventCode, raw.studentId);
-            setPData(payload);
-            setMeetings(remoteProgress || localProgress);
-            setMode("parent");
-            return;
-          }
-
-          const safe = normalizeParentPayload(raw);
-          setPData(safe);
-          setMeetings(loadParentMeetings(safe.child || "parent", safe.teachers));
-          setMode("parent");
+          await openParentState(dec(hash.slice(3)));
           return;
         }
 
-        if (hash.startsWith("#eventCode=")) {
-          const code = decodeURIComponent(hash.slice(11)).toUpperCase();
-          if (!cloudReady) throw new Error("Firebase config is missing for this event link.");
-          const remoteEvent = await loadEvent(code);
-          if (!remoteEvent) throw new Error(`No event found for code ${code}.`);
-          setEntranceData(remoteEvent);
-          setMode("entrance");
-          return;
-        }
-
-        if (hash.startsWith("#event=")) {
-          const raw = dec(hash.slice(7));
-          setEntranceData(normalizeAdminState(raw));
-          setMode("entrance");
+        if (hash.startsWith("#eventCode=") || hash.startsWith("#event=")) {
+          await openEntranceState(hash);
           return;
         }
 
@@ -259,7 +268,30 @@ export default function App() {
 
     init();
 
+    const onHashChange = async () => {
+      const hash = window.location.hash || "";
+      try {
+        if (hash.startsWith("#p=")) {
+          await openParentState(dec(hash.slice(3)));
+          return;
+        }
+
+        if (hash.startsWith("#eventCode=") || hash.startsWith("#event=")) {
+          await openEntranceState(hash);
+          return;
+        }
+
+        setMode("home");
+      } catch (error) {
+        setBootError(String(error?.message || error));
+        setMode("error");
+      }
+    };
+
+    window.addEventListener("hashchange", onHashChange);
+
     return () => {
+      window.removeEventListener("hashchange", onHashChange);
       try {
         document.head.removeChild(lk);
       } catch {}
@@ -343,11 +375,33 @@ export default function App() {
   };
 
   const openEntranceView = () => {
-    window.location.hash = cloudReady && eventCode
-      ? `eventCode=${encodeURIComponent(eventCode)}`
-      : `event=${enc(currentEvent)}`;
-    setEntranceData(currentEvent);
-    setMode("entrance");
+    const open = async () => {
+      const savedSetup = safeGetStorage(STORAGE_KEY);
+
+      if (cloudReady && eventCode) {
+        try {
+          const remoteEvent = await loadEvent(eventCode);
+          if (remoteEvent) {
+            window.location.hash = `eventCode=${encodeURIComponent(eventCode)}`;
+            setEntranceData(remoteEvent);
+            setMode("entrance");
+            return;
+          }
+        } catch {}
+      }
+
+      if (savedSetup) {
+        window.location.hash = `event=${enc(currentEvent)}`;
+        setEntranceData(currentEvent);
+        setMode("entrance");
+        return;
+      }
+
+      setBootError("No published entrance event is available yet. Ask staff to publish the event first.");
+      setMode("error");
+    };
+
+    open();
   };
 
   const openAdminView = () => {
