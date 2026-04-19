@@ -120,6 +120,7 @@ function classTeacherCount(source, classId) {
 function normalizeAdminState(raw) {
   return {
     school: raw?.school || DEFAULT_SCHOOL,
+    schoolLogo: raw?.schoolLogo || "",
     evtName: raw?.evtName || DEFAULT_EVENT,
     evtDate: raw?.evtDate || "",
     notesEmail: raw?.notesEmail || DEFAULT_NOTES_EMAIL,
@@ -130,8 +131,8 @@ function normalizeAdminState(raw) {
   };
 }
 
-function buildEventPayload({ school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students }) {
-  return { school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students };
+function buildEventPayload({ school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students }) {
+  return { school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students };
 }
 
 function markEntranceSource(payload, sourceType) {
@@ -141,10 +142,19 @@ function markEntranceSource(payload, sourceType) {
   };
 }
 
+function schoolInitials(name) {
+  return String(name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
+
 function buildParentPayload(source, student) {
   const cls = (source.classes || []).find((c) => c.id === student.cid);
   const teacherList = cls
-    ? (source.teachers || []).filter((t) => (cls.tids || []).includes(t.id) && t.status !== "unavailable")
+    ? (source.teachers || []).filter((t) => (cls.tids || []).includes(t.id))
     : [];
 
   return {
@@ -169,6 +179,7 @@ export default function App() {
   const [adminTab, setAdminTab] = useState("teachers");
 
   const [school, setSchool] = useState(DEFAULT_SCHOOL);
+  const [schoolLogo, setSchoolLogo] = useState("");
   const [evtName, setEvtName] = useState(DEFAULT_EVENT);
   const [evtDate, setEvtDate] = useState("");
   const [notesEmail, setNotesEmail] = useState(DEFAULT_NOTES_EMAIL);
@@ -236,7 +247,7 @@ export default function App() {
   useEffect(() => {
     const lk = document.createElement("link");
     lk.href =
-      "https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap";
+      "https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap";
     lk.rel = "stylesheet";
     document.head.appendChild(lk);
 
@@ -258,6 +269,7 @@ export default function App() {
         if (saved) {
           const state = normalizeAdminState(JSON.parse(saved));
           setSchool(state.school);
+          setSchoolLogo(state.schoolLogo);
           setEvtName(state.evtName);
           setEvtDate(state.evtDate);
           setNotesEmail(state.notesEmail);
@@ -312,9 +324,9 @@ export default function App() {
     if (mode !== "admin") return;
     safeSetStorage(
       STORAGE_KEY,
-      JSON.stringify({ school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students })
+      JSON.stringify({ school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students })
     );
-  }, [mode, school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students]);
+  }, [mode, school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students]);
 
   useEffect(() => {
     if (adminPin) {
@@ -334,7 +346,7 @@ export default function App() {
     }
   }, [mode, pData, meetings]);
 
-  const currentEvent = buildEventPayload({ school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students });
+  const currentEvent = buildEventPayload({ school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students });
   const eventUrl =
     cloudReady && eventCode
       ? `${window.location.href.split("#")[0]}#eventCode=${encodeURIComponent(eventCode)}`
@@ -481,6 +493,7 @@ export default function App() {
 
   const resetDemoData = () => {
     setSchool(DEFAULT_SCHOOL);
+    setSchoolLogo("");
     setEvtName(DEFAULT_EVENT);
     setEvtDate("");
     setNotesEmail(DEFAULT_NOTES_EMAIL);
@@ -507,6 +520,7 @@ export default function App() {
   const importSetup = (parsed) => {
     const state = normalizeAdminState(parsed);
     setSchool(state.school);
+    setSchoolLogo(state.schoolLogo);
     setEvtName(state.evtName);
     setEvtDate(state.evtDate);
     setNotesEmail(state.notesEmail);
@@ -531,7 +545,7 @@ export default function App() {
       (pData.teachers || [])
         .map((t) => {
           const m = meetings?.[t.id] || {};
-          return `${m.done ? "✓" : "○"} ${t.name} (${t.subject})${t.time ? ` · ${t.time}` : ""}${t.room ? ` · ${t.room}` : ""}${t.floor ? ` · ${t.floor}` : ""}${m.followUp ? "\nNeeds follow-up" : ""}${m.notes ? `\n${m.notes}` : ""}`;
+          return `${t.status === "unavailable" ? "–" : m.done ? "✓" : "○"} ${t.name} (${t.subject})${t.time ? ` · ${t.time}` : ""}${t.room ? ` · ${t.room}` : ""}${t.floor ? ` · ${t.floor}` : ""}${t.status === "unavailable" && t.note ? `\nUnavailable: ${t.note}` : ""}${m.followUp ? "\nNeeds follow-up" : ""}${m.notes ? `\n${m.notes}` : ""}`;
         })
         .join("\n\n");
 
@@ -559,8 +573,8 @@ export default function App() {
       <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 480, margin: "0 auto", paddingBottom: 100 }}>
         <div style={{ background: G, padding: "26px 20px 24px", color: "white" }}>
           <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>{pData.school}</div>
-          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 700, lineHeight: 1.1, marginBottom: 4 }}>{pData.evtName}</div>
-          {pData.child && <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 2 }}>{pData.child}{pData.parent ? ` · ${pData.parent}` : ""}</div>}
+          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 30, fontWeight: 800, lineHeight: 1.08, marginBottom: 4 }}>{pData.evtName}</div>
+          {pData.child && <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.88, marginBottom: 2 }}>{pData.child}{pData.parent ? ` · ${pData.parent}` : ""}</div>}
           {pData.evtDate && <div style={{ fontSize: 12, opacity: 0.5 }}>{fmtDate(pData.evtDate)}</div>}
           <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "14px 16px", marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
@@ -568,7 +582,7 @@ export default function App() {
                 {all ? "All done!" : `${total - done} meeting${total - done !== 1 ? "s" : ""} remaining`}
                 {followUpCount ? ` · ${followUpCount} need follow-up` : ""}
               </div>
-              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700 }}>{pct}%</div>
+              <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 24, fontWeight: 800 }}>{pct}%</div>
             </div>
             <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 999, height: 8, overflow: "hidden" }}>
               <div style={{ background: all ? "#5DD88A" : A, height: "100%", width: `${pct}%`, borderRadius: 999, transition: "width .5s ease" }} />
@@ -580,7 +594,7 @@ export default function App() {
           <div style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#9A9A9A", marginBottom: 10 }}>Your Meetings</div>
           {!ts.length && (
             <Card>
-              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 20, color: G, marginBottom: 8 }}>No teachers assigned yet</div>
+              <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: G, marginBottom: 8 }}>No teachers assigned yet</div>
               <div style={{ fontSize: 14, lineHeight: 1.55, color: "#75695E" }}>
                 This class does not have a meeting list yet. Please check with the staff desk.
               </div>
@@ -589,50 +603,66 @@ export default function App() {
           {ts.map((t) => {
             const m = meetings?.[t.id] || {};
             const ex = expanded === t.id;
+            const unavailable = t.status === "unavailable";
             return (
-              <div key={t.id} style={{ background: m.done ? "#F0F7F3" : "white", borderRadius: 18, marginBottom: 10, border: m.done ? `2px solid ${G}22` : "2px solid transparent", boxShadow: "0 2px 10px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+              <div key={t.id} style={{ background: unavailable ? "#F3F0EC" : m.done ? "#F0F7F3" : "white", borderRadius: 18, marginBottom: 10, border: unavailable ? "2px solid #E4DDD3" : m.done ? `2px solid ${G}22` : "2px solid transparent", boxShadow: "0 2px 10px rgba(0,0,0,0.06)", overflow: "hidden", opacity: unavailable ? 0.78 : 1 }}>
                 <div style={{ padding: "15px 16px", display: "flex", alignItems: "center", gap: 13 }}>
-                  <button onClick={() => setMeetings((p) => ({ ...p, [t.id]: { ...p[t.id], done: !p[t.id]?.done } }))} style={{ width: 36, height: 36, borderRadius: "50%", border: m.done ? `2.5px solid ${G}` : "2.5px solid #D4CCC4", background: m.done ? G : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {m.done && <span style={{ color: "white", fontSize: 17 }}>✓</span>}
+                  <button
+                    onClick={() => {
+                      if (unavailable) return;
+                      setMeetings((p) => ({ ...p, [t.id]: { ...p[t.id], done: !p[t.id]?.done } }));
+                    }}
+                    disabled={unavailable}
+                    style={{ width: 36, height: 36, borderRadius: "50%", border: unavailable ? "2.5px solid #D8CEC2" : m.done ? `2.5px solid ${G}` : "2.5px solid #D4CCC4", background: unavailable ? "#EEE7DD" : m.done ? G : "transparent", cursor: unavailable ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                  >
+                    {unavailable ? <span style={{ color: "#9E907F", fontSize: 16 }}>–</span> : m.done && <span style={{ color: "white", fontSize: 17 }}>✓</span>}
                   </button>
                   <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpanded(ex ? null : t.id)}>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: m.done ? "#5A7A65" : "#1C1C1C", textDecoration: m.done ? "line-through" : "none" }}>{t.name}</div>
-                    <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 2 }}>
+                    <div style={{ fontWeight: 700, fontSize: 17, color: unavailable ? "#8E8172" : m.done ? "#5A7A65" : "#1C1C1C", textDecoration: m.done ? "line-through" : "none" }}>{t.name}</div>
+                    <div style={{ fontSize: 14, color: "#9A9A9A", marginTop: 3 }}>
                       {[t.subject, t.room, t.floor].filter(Boolean).join(" · ")}
+                      {unavailable && t.note ? ` · absent: ${t.note}` : ""}
                       {m.followUp ? " · needs follow-up" : ""}
                     </div>
                   </div>
                   <div style={{ textAlign: "right", cursor: "pointer", flexShrink: 0 }} onClick={() => setExpanded(ex ? null : t.id)}>
-                    {t.time && <div style={{ fontSize: 12, fontWeight: 700, color: A }}>{t.time}</div>}
-                    <div style={{ fontSize: 12, marginTop: 4, color: m.notes ? G : "#BBBBBB" }}>{m.notes ? "📝" : "note ▾"}</div>
+                    {unavailable ? <div style={{ fontSize: 12, fontWeight: 700, color: "#9E907F" }}>Unavailable</div> : t.time && <div style={{ fontSize: 12, fontWeight: 700, color: A }}>{t.time}</div>}
+                    <div style={{ fontSize: 12, marginTop: 4, color: m.notes ? G : "#BBBBBB" }}>{m.notes ? "📝" : unavailable ? "info ▾" : "note ▾"}</div>
                   </div>
                 </div>
                 {ex && (
                   <div style={{ borderTop: "1px solid #ECEAE6", padding: "14px 16px", background: "rgba(255,255,255,0.5)" }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                      <button
-                        onClick={() =>
-                          setMeetings((p) => ({
-                            ...p,
-                            [t.id]: { ...p[t.id], followUp: !p[t.id]?.followUp },
-                          }))
-                        }
-                        style={{
-                          background: m.followUp ? "#FFF0E3" : "#F5F2EE",
-                          color: m.followUp ? A : "#6F655B",
-                          border: m.followUp ? `1.5px solid ${A}` : "1.5px solid #E0D8CC",
-                          borderRadius: 999,
-                          padding: "8px 12px",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {m.followUp ? "Needs follow-up" : "Mark for follow-up"}
-                      </button>
-                    </div>
+                    {unavailable && t.note && (
+                      <div style={{ background: "#EEE7DD", color: "#7B6D5D", borderRadius: 12, padding: "10px 12px", fontSize: 13, marginBottom: 12 }}>
+                        This teacher is unavailable. Note: {t.note}
+                      </div>
+                    )}
+                    {!unavailable && (
+                      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        <button
+                          onClick={() =>
+                            setMeetings((p) => ({
+                              ...p,
+                              [t.id]: { ...p[t.id], followUp: !p[t.id]?.followUp },
+                            }))
+                          }
+                          style={{
+                            background: m.followUp ? "#FFF0E3" : "#F5F2EE",
+                            color: m.followUp ? A : "#6F655B",
+                            border: m.followUp ? `1.5px solid ${A}` : "1.5px solid #E0D8CC",
+                            borderRadius: 999,
+                            padding: "8px 12px",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {m.followUp ? "Needs follow-up" : "Mark for follow-up"}
+                        </button>
+                      </div>
+                    )}
                     <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#9A9A9A", marginBottom: 8 }}>Notes</div>
-                    <textarea value={m.notes || ""} onChange={(e) => setMeetings((p) => ({ ...p, [t.id]: { ...p[t.id], notes: e.target.value } }))} rows={3} style={{ width: "100%", border: "1.5px solid #E0D8CC", borderRadius: 12, padding: "10px 14px", fontSize: 14, resize: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box" }} />
+                    <textarea disabled={unavailable} value={m.notes || ""} onChange={(e) => setMeetings((p) => ({ ...p, [t.id]: { ...p[t.id], notes: e.target.value } }))} rows={3} style={{ width: "100%", border: "1.5px solid #E0D8CC", borderRadius: 12, padding: "10px 14px", fontSize: 14, resize: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box", background: unavailable ? "#F6F1EA" : "white", color: unavailable ? "#9E907F" : "#1C1C1C" }} />
                   </div>
                 )}
               </div>
@@ -654,6 +684,7 @@ export default function App() {
       <>
         <HomeView
           school={school}
+          schoolLogo={schoolLogo}
           evtName={evtName}
           evtDate={evtDate}
           eventCode={eventCode}
@@ -703,6 +734,7 @@ export default function App() {
   return (
     <AdminDashboard
       school={school}
+      schoolLogo={schoolLogo}
       evtName={evtName}
       evtDate={evtDate}
       notesEmail={notesEmail}
@@ -724,6 +756,8 @@ export default function App() {
           <TeachersTab
             school={school}
             setSchool={setSchool}
+            schoolLogo={schoolLogo}
+            setSchoolLogo={setSchoolLogo}
             evtName={evtName}
             setEvtName={setEvtName}
             evtDate={evtDate}
@@ -819,8 +853,8 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
           ← Home
         </button>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Entrance List</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, lineHeight: 1.05, marginBottom: 6 }}>{data.evtName}</div>
-        <div style={{ fontSize: 14, opacity: 0.82 }}>{data.school}</div>
+        <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{data.evtName}</div>
+        <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.86 }}>{data.school}</div>
         <div style={{ fontSize: 13, opacity: 0.62, marginTop: 4 }}>{fmtDate(data.evtDate)}</div>
         <div style={{ marginTop: 18, background: "rgba(255,255,255,0.12)", borderRadius: 16, padding: "14px 16px" }}>
           Type at least 2 letters from the student name to reveal matches.
@@ -839,7 +873,7 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
         </Card>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontFamily: "'Fraunces',serif", fontSize: 20, color: G }}>Families <N n={visibleStudents.length} /></div>
+          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: G }}>Families <N n={visibleStudents.length} /></div>
           <Btn light onClick={() => copyText(window.location.href, "entrance-link")}>{copied === "entrance-link" ? "✓ Link copied" : "Copy this page"}</Btn>
         </div>
 
@@ -854,8 +888,8 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
             <Card key={student.id}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: G }}>{student.child}</div>
-                  <div style={{ fontSize: 13, color: "#857A70", marginTop: 2 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: G }}>{student.child}</div>
+                  <div style={{ fontSize: 14, color: "#857A70", marginTop: 3 }}>
                     {activeTeacherCount
                       ? [cls?.name, `${activeTeacherCount} teachers`].filter(Boolean).join(" · ")
                       : [cls?.name, "Teacher list not assigned yet"].filter(Boolean).join(" · ")}
@@ -875,6 +909,7 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
 
 function HomeView({
   school,
+  schoolLogo,
   evtName,
   evtDate,
   cloudReady,
@@ -892,6 +927,7 @@ function HomeView({
   const statusLabel = cloudReady
     ? publishState || "Enter the meeting code from the school to open the student list."
     : "Cloud event lookup is unavailable on this build.";
+  const eventLabel = evtName && evtName !== DEFAULT_EVENT ? evtName : "School Parent Meetings";
 
   return (
     <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
@@ -902,12 +938,25 @@ function HomeView({
             {adminConfigured ? "Staff login" : "Staff dashboard"}
           </button>
         </div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 34, lineHeight: 1.02, marginBottom: 10 }}>{school}</div>
-        <div style={{ fontSize: 18, opacity: 0.92, marginBottom: 4 }}>{evtName}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)" }}>
+            {schoolLogo ? (
+              <img src={schoolLogo} alt={`${school} logo`} style={{ width: 46, height: 46, borderRadius: 14, objectFit: "contain", background: CR, padding: 6, boxSizing: "border-box" }} />
+            ) : (
+            <div style={{ width: 46, height: 46, borderRadius: 14, background: CR, color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800 }}>
+                {schoolInitials(school) || "SM"}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 34, fontWeight: 800, lineHeight: 1.02, marginBottom: 6 }}>{school}</div>
+            <div style={{ fontSize: 18, opacity: 0.92 }}>{eventLabel}</div>
+          </div>
+        </div>
         {evtDate && <div style={{ fontSize: 13, opacity: 0.66 }}>{fmtDate(evtDate)}</div>}
         <div style={{ marginTop: 22, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "18px 16px" }}>
           <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92 }}>
-            Parents should open the student list with the meeting code provided by the school.
+            Welcome to the school. Enter the meeting code to find your child, view the teacher list, and see each meeting location.
           </div>
           <input
             value={landingCode}
@@ -935,7 +984,7 @@ function HomeView({
               { label: "Students", value: studentCount },
             ].map((item) => (
               <div key={item.label} style={{ background: "#F8F4EE", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Fraunces',serif", fontSize: 24, color: G }}>{item.value}</div>
+                <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 24, fontWeight: 800, color: G }}>{item.value}</div>
                 <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#8B8075", marginTop: 4 }}>{item.label}</div>
               </div>
             ))}
@@ -951,6 +1000,7 @@ function HomeView({
 
 function AdminDashboard({
   school,
+  schoolLogo,
   evtName,
   evtDate,
   notesEmail,
@@ -980,7 +1030,16 @@ function AdminDashboard({
           </button>
         </div>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 28, lineHeight: 1.05, marginBottom: 6 }}>{school}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          {schoolLogo ? (
+            <img src={schoolLogo} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: CR, padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
+              {schoolInitials(school) || "SM"}
+            </div>
+          )}
+          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school}</div>
+        </div>
         <div style={{ fontSize: 15, opacity: 0.88 }}>{evtName}</div>
         <div style={{ fontSize: 12, opacity: 0.58, marginTop: 4 }}>
           {[evtDate ? fmtDate(evtDate) : "", notesEmail || "", eventCode ? `Code ${eventCode}` : ""].filter(Boolean).join(" · ")}
@@ -992,7 +1051,7 @@ function AdminDashboard({
             { label: "Students", value: studentCount },
           ].map((item) => (
             <div key={item.label} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
-              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22 }}>{item.value}</div>
+              <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800 }}>{item.value}</div>
               <div style={{ fontSize: 11, opacity: 0.72, marginTop: 2 }}>{item.label}</div>
             </div>
           ))}
@@ -1043,6 +1102,8 @@ function AdminDashboard({
 function TeachersTab({
   school,
   setSchool,
+  schoolLogo,
+  setSchoolLogo,
   evtName,
   setEvtName,
   evtDate,
@@ -1068,6 +1129,7 @@ function TeachersTab({
   const [editFm, setEditFm] = useState({});
   const fileInputRef = useRef(null);
   const csvInputRef = useRef(null);
+  const logoInputRef = useRef(null);
 
   const addT = () => {
     if (!form.name) return;
@@ -1113,10 +1175,35 @@ function TeachersTab({
     event.target.value = "";
   };
 
+  const importLogo = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSchoolLogo(typeof reader.result === "string" ? reader.result : "");
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
+
   return (
     <div>
       <div style={{ background: "white", borderRadius: 16, padding: "16px 18px", marginBottom: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
         <SLabel>Event Details</SLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          {schoolLogo ? (
+            <img src={schoolLogo} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box" }} />
+          ) : (
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "#F5F0E8", color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800 }}>
+              {schoolInitials(school) || "SM"}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Btn light onClick={() => logoInputRef.current?.click()}>Upload logo</Btn>
+            {schoolLogo && <Btn light onClick={() => setSchoolLogo("")}>Remove logo</Btn>}
+          </div>
+        </div>
+        <input ref={logoInputRef} type="file" accept="image/*" onChange={importLogo} style={{ display: "none" }} />
         <input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="School name" style={{ ...iBase, marginBottom: 8 }} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           <input value={evtName} onChange={(e) => setEvtName(e.target.value)} placeholder="Event name" style={iBase} />
@@ -1211,8 +1298,8 @@ function TeachersTab({
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: "#9A9A9A", marginTop: 2 }}>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</div>
+                <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>
                   {[t.subject, t.room, t.floor, t.status === "unavailable" ? "İzinli" : t.time, t.note].filter(Boolean).join(" · ")}
                 </div>
               </div>
@@ -1259,8 +1346,8 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
           <div key={cls.id} style={{ background: "white", borderRadius: 16, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: G }}>{cls.name}</div>
-                <div style={{ fontSize: 12, color: "#9A9A9A", marginTop: 2 }}>{activeTeacherCount} teachers · {stuCount} students</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: G }}>{cls.name}</div>
+                <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>{activeTeacherCount} teachers · {stuCount} students</div>
               </div>
               <Btn onClick={() => setOpenId(isOpen ? null : cls.id)} style={{ background: isOpen ? G : "#E8F0EC", color: isOpen ? "white" : G }}>{isOpen ? "Done ✓" : "Edit Teachers"}</Btn>
               <IBtn onClick={() => onRemove(cls.id)} red>✕</IBtn>
@@ -1269,11 +1356,11 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
               <div style={{ borderTop: "1px solid #F0EBE3", padding: "12px 16px" }}>
                 {teachers.map((t, i) => {
                   const checked = (cls?.tids || []).includes(t.id);
-                  const disabled = t.status === "unavailable";
+                  const unavailable = t.status === "unavailable";
                   return (
-                    <div key={t.id} onClick={() => { if (!disabled) toggleT(cls.id, t.id); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: i < teachers.length - 1 ? "1px solid #F5F2EE" : "none", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.55 : 1 }}>
-                      <div style={{ width: 24, height: 24, borderRadius: 6, border: disabled ? "2px solid #D8D8D8" : checked ? `2px solid ${G}` : "2px solid #D4CCC4", background: disabled ? "#F1F1F1" : checked ? G : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{checked && !disabled && <span style={{ color: "white", fontSize: 13 }}>✓</span>}</div>
-                      <div><div style={{ fontSize: 14, fontWeight: 600 }}>{t.name}{disabled ? " · İzinli" : ""}</div><div style={{ fontSize: 12, color: "#9A9A9A" }}>{[t.subject, t.room, t.floor, disabled ? "İzinli" : t.time].filter(Boolean).join(" · ")}</div></div>
+                    <div key={t.id} onClick={() => { toggleT(cls.id, t.id); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: i < teachers.length - 1 ? "1px solid #F5F2EE" : "none", cursor: "pointer", opacity: unavailable ? 0.72 : 1 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 6, border: checked ? `2px solid ${G}` : "2px solid #D4CCC4", background: checked ? G : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{checked && <span style={{ color: "white", fontSize: 13 }}>✓</span>}</div>
+                      <div><div style={{ fontSize: 15, fontWeight: 700 }}>{t.name}{unavailable ? " · Unavailable" : ""}</div><div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 2 }}>{[t.subject, t.room, t.floor, unavailable ? t.note || "Unavailable" : t.time].filter(Boolean).join(" · ")}</div></div>
                     </div>
                   );
                 })}
@@ -1338,8 +1425,8 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
   return (
     <div>
       <Card>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 18, color: G, marginBottom: 6 }}>Entrance Sharing</div>
-        <div style={{ fontSize: 13, color: "#7D746C", marginBottom: 12 }}>
+        <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800, color: G, marginBottom: 6 }}>Entrance Sharing</div>
+        <div style={{ fontSize: 14, color: "#7D746C", marginBottom: 12 }}>
           {cloudReady ? "Use one entrance QR after publishing the event to Firebase." : "Firebase config missing, so only per-student QR links will work reliably."}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -1397,8 +1484,8 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
         return (
           <div key={s.id} style={{ background: "white", borderRadius: 14, padding: "13px 16px", marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{s.child}</div>
-              <div style={{ fontSize: 12, color: cls ? "#9A9A9A" : "#D44", marginTop: 2 }}>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>{s.child}</div>
+              <div style={{ fontSize: 13, color: cls ? "#9A9A9A" : "#D44", marginTop: 3 }}>
                 {cls ? `${cls.name} · ${activeTeacherCount} teacher${activeTeacherCount !== 1 ? "s" : ""}` : "⚠ No class assigned"}
                 {s.parent ? ` · ${s.parent}` : ""}
               </div>
@@ -1425,7 +1512,7 @@ function QrModal({ title, subtitle, imageUrl, footer, primaryLabel, secondaryLab
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, padding: 20 }} onClick={onClose}>
       <div style={{ background: "white", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, color: G, marginBottom: 4 }}>{title}</div>
+        <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: G, marginBottom: 4 }}>{title}</div>
         <div style={{ fontSize: 12, color: "#9A9A9A", marginBottom: 12 }}>{subtitle}</div>
         <div style={{ background: "#F5F0E8", borderRadius: 16, padding: 14, display: "inline-block", marginBottom: 14 }}>
           <img src={imageUrl} alt="QR" style={{ width: 220, height: 220, display: "block", borderRadius: 8 }} />
@@ -1443,7 +1530,7 @@ function AdminPinModal({ pinDraft, setPinDraft, pinError, onSubmit, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }} onClick={onClose}>
       <div style={{ background: "white", borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }} onClick={(event) => event.stopPropagation()}>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 24, color: G, marginBottom: 6 }}>Staff login</div>
+        <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 24, fontWeight: 800, color: G, marginBottom: 6 }}>Staff login</div>
         <div style={{ fontSize: 13, lineHeight: 1.5, color: "#75695E", marginBottom: 14 }}>
           Enter the staff PIN to open the dashboard.
         </div>
@@ -1493,7 +1580,7 @@ function SLabel({ children }) {
 }
 
 function SHead({ children }) {
-  return <div style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 600, color: G }}>{children}</div>;
+  return <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 21, fontWeight: 800, color: G }}>{children}</div>;
 }
 
 function N({ n }) {
