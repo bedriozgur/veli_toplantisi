@@ -9,6 +9,7 @@ import {
   normalizeParentPayload,
   buildMeetingsState,
 } from "./utils/normalizeData";
+import { parseCsv } from "./utils/csv";
 import { isCloudConfigured, loadEvent, loadProgress, publishEvent, saveProgress } from "./cloud";
 
 const G = "#1B3A2D";
@@ -16,10 +17,13 @@ const A = "#C4803A";
 const CR = "#F5F0E8";
 const STORAGE_KEY = "pe_admin_v2";
 const PARENT_KEY_PREFIX = "pe_parent_v2:";
+const ADMIN_PIN_KEY = "pe_admin_pin";
+const ADMIN_UNLOCK_KEY = "pe_admin_unlock";
 
 const DEFAULT_SCHOOL = "Oakwood Academy";
 const DEFAULT_EVENT = "Parents' Evening";
 const DEFAULT_NOTES_EMAIL = "parents-evening@school.org";
+const DEFAULT_ADMIN_PIN = "";
 
 const iBase = {
   width: "100%",
@@ -34,8 +38,19 @@ const iBase = {
   color: "#1C1C1C",
 };
 
-const enc = (d) => btoa(unescape(encodeURIComponent(JSON.stringify(d))));
-const dec = (s) => JSON.parse(decodeURIComponent(escape(atob(s))));
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const enc = (data) =>
+  btoa(String.fromCharCode(...encoder.encode(JSON.stringify(data))))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+const dec = (value) => {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  const normalized = padded + "=".repeat((4 - (padded.length % 4 || 4)) % 4);
+  const bytes = Uint8Array.from(atob(normalized), (char) => char.charCodeAt(0));
+  return JSON.parse(decoder.decode(bytes));
+};
 const uid = () => Date.now() + Math.floor(Math.random() * 9999);
 const cloudReady = isCloudConfigured();
 
@@ -87,6 +102,18 @@ function loadParentMeetings(keyId, teachers) {
   } catch {
     return blankMeetings(teachers);
   }
+}
+
+function getStoredAdminPin() {
+  return safeGetStorage(ADMIN_PIN_KEY) || import.meta.env.VITE_ADMIN_PIN || DEFAULT_ADMIN_PIN;
+}
+
+function classTeacherCount(source, classId) {
+  const cls = (source.classes || []).find((item) => item.id === classId);
+  if (!cls) return 0;
+  return (source.teachers || []).filter(
+    (teacher) => (cls.tids || []).includes(teacher.id) && teacher.status !== "unavailable"
+  ).length;
 }
 
 function normalizeAdminState(raw) {
@@ -151,6 +178,11 @@ export default function App() {
   const [showEventQr, setShowEventQr] = useState(false);
   const [copied, setCopied] = useState("");
   const [publishState, setPublishState] = useState("");
+  const [adminPin, setAdminPin] = useState(getStoredAdminPin());
+  const [adminUnlocked, setAdminUnlocked] = useState(safeGetStorage(ADMIN_UNLOCK_KEY) === "yes");
+  const [showAdminGate, setShowAdminGate] = useState(false);
+  const [pinDraft, setPinDraft] = useState("");
+  const [pinError, setPinError] = useState("");
 
   useEffect(() => {
     const lk = document.createElement("link");
@@ -196,6 +228,13 @@ export default function App() {
           return;
         }
 
+        if (hash.startsWith("#event=")) {
+          const raw = dec(hash.slice(7));
+          setEntranceData(normalizeAdminState(raw));
+          setMode("entrance");
+          return;
+        }
+
         const saved = safeGetStorage(STORAGE_KEY);
         if (saved) {
           const state = normalizeAdminState(JSON.parse(saved));
@@ -209,7 +248,7 @@ export default function App() {
           setStudents(state.students);
         }
 
-        setMode("admin");
+        setMode("home");
       } catch (error) {
         setBootError(String(error?.message || error));
         setMode("error");
@@ -234,6 +273,16 @@ export default function App() {
       JSON.stringify({ school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students })
     );
   }, [mode, school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students]);
+
+  useEffect(() => {
+    if (adminPin) {
+      safeSetStorage(ADMIN_PIN_KEY, adminPin);
+    }
+  }, [adminPin]);
+
+  useEffect(() => {
+    safeSetStorage(ADMIN_UNLOCK_KEY, adminUnlocked ? "yes" : "no");
+  }, [adminUnlocked]);
 
   useEffect(() => {
     if (mode !== "parent" || !pData?.keyId) return;
@@ -291,6 +340,57 @@ export default function App() {
   const openParentView = (student, source) => {
     const target = source.eventCode ? { eventCode: source.eventCode, studentId: student.id } : buildParentPayload(source, student);
     window.location.hash = `p=${enc(target)}`;
+  };
+
+  const openEntranceView = () => {
+    window.location.hash = cloudReady && eventCode
+      ? `eventCode=${encodeURIComponent(eventCode)}`
+      : `event=${enc(currentEvent)}`;
+    setEntranceData(currentEvent);
+    setMode("entrance");
+  };
+
+  const openAdminView = () => {
+    if (adminUnlocked) {
+      window.location.hash = "";
+      setMode("admin");
+      return;
+    }
+    if (!adminPin) {
+      window.location.hash = "";
+      setAdminUnlocked(true);
+      setMode("admin");
+      return;
+    }
+    setPinDraft("");
+    setPinError("");
+    setShowAdminGate(true);
+  };
+
+  const goHome = () => {
+    window.location.hash = "";
+    setMode("home");
+  };
+
+  const unlockAdmin = () => {
+    if (!adminPin || pinDraft === adminPin) {
+      setAdminUnlocked(true);
+      setShowAdminGate(false);
+      setPinDraft("");
+      setPinError("");
+      window.location.hash = "";
+      setMode("admin");
+      return;
+    }
+    setPinError("Incorrect PIN");
+  };
+
+  const lockAdmin = () => {
+    setAdminUnlocked(false);
+    setShowAdminGate(false);
+    setPinDraft("");
+    setPinError("");
+    goHome();
   };
 
   const resetDemoData = () => {
@@ -360,7 +460,7 @@ export default function App() {
   if (mode === "error") return <ErrorScreen message={bootError} />;
 
   if (mode === "entrance" && entranceData) {
-    return <EntranceView data={entranceData} copyText={copyText} copied={copied} openParentView={openParentView} />;
+    return <EntranceView data={entranceData} copyText={copyText} copied={copied} openParentView={openParentView} onBack={goHome} />;
   }
 
   if (mode === "parent" && pData) {
@@ -390,6 +490,14 @@ export default function App() {
 
         <div style={{ padding: "14px 16px" }}>
           <div style={{ fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#9A9A9A", marginBottom: 10 }}>Your Meetings</div>
+          {!ts.length && (
+            <Card>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 20, color: G, marginBottom: 8 }}>No teachers assigned yet</div>
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: "#75695E" }}>
+                This class does not have a meeting list yet. Please check with the staff desk.
+              </div>
+            </Card>
+          )}
           {ts.map((t) => {
             const m = meetings?.[t.id] || {};
             const ex = expanded === t.id;
@@ -428,22 +536,73 @@ export default function App() {
     );
   }
 
+  if (mode === "home") {
+    return (
+      <>
+        <HomeView
+          school={school}
+          evtName={evtName}
+          evtDate={evtDate}
+          eventCode={eventCode}
+          cloudReady={cloudReady}
+          publishState={publishState}
+          teacherCount={teachers.length}
+          classCount={classes.length}
+          studentCount={students.length}
+          onOpenEntrance={openEntranceView}
+          onOpenAdmin={openAdminView}
+          onOpenEventQr={() => setShowEventQr(true)}
+          adminConfigured={Boolean(adminPin)}
+        />
+        {showEventQr && (
+          <QrModal
+            title="Entrance QR"
+            subtitle={cloudReady ? "Parents scan, type the student name, and open their checklist from a short event link." : "Firebase config missing, so this falls back to local-only QR data."}
+            imageUrl={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(eventUrl)}&bgcolor=F5F0E8&color=1B3A2D&margin=6`}
+            footer={cloudReady ? `Event code ${eventCode}` : "Configure Firebase env vars for cloud mode"}
+            primaryLabel={copied === "event-link" ? "✓ Link copied" : "Copy entrance link"}
+            onPrimary={() => copyText(eventUrl, "event-link")}
+            onClose={() => setShowEventQr(false)}
+          />
+        )}
+        {showAdminGate && (
+          <AdminPinModal
+            pinDraft={pinDraft}
+            setPinDraft={setPinDraft}
+            pinError={pinError}
+            onSubmit={unlockAdmin}
+            onClose={() => {
+              setShowAdminGate(false);
+              setPinError("");
+              setPinDraft("");
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   const qrStu = qrStuId ? students.find((s) => s.id === qrStuId) : null;
 
   return (
-    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ background: G, padding: "22px 20px 0", color: "white" }}>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 4 }}>Admin Panel</div>
-        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700, marginBottom: 14 }}>{school} · {evtName}</div>
-        <div style={{ display: "flex" }}>
-          {[["teachers", "Teachers"], ["classes", "Classes"], ["students", "Students & QR"]].map(([tab, label]) => (
-            <button key={tab} onClick={() => setAdminTab(tab)} style={{ flex: 1, background: adminTab === tab ? CR : "transparent", color: adminTab === tab ? G : "rgba(255,255,255,0.6)", border: "none", padding: "11px 4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: adminTab === tab ? "10px 10px 0 0" : 0 }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <AdminDashboard
+      school={school}
+      evtName={evtName}
+      evtDate={evtDate}
+      notesEmail={notesEmail}
+      eventCode={eventCode}
+      publishState={publishState}
+      cloudReady={cloudReady}
+      teacherCount={teachers.length}
+      classCount={classes.length}
+      studentCount={students.length}
+      adminTab={adminTab}
+      setAdminTab={setAdminTab}
+      onBack={goHome}
+      onOpenEntrance={openEntranceView}
+      onOpenEventQr={() => setShowEventQr(true)}
+      onLock={lockAdmin}
+    >
       <div style={{ padding: "18px 16px 120px" }}>
         {adminTab === "teachers" && (
           <TeachersTab
@@ -468,6 +627,8 @@ export default function App() {
             publishState={publishState}
             onDownloadSetup={downloadSetup}
             onImportSetup={importSetup}
+            adminPin={adminPin}
+            setAdminPin={setAdminPin}
           />
         )}
         {adminTab === "classes" && <ClassesTab classes={classes} setClasses={setClasses} teachers={teachers} students={students} onRemove={(id) => {
@@ -505,11 +666,24 @@ export default function App() {
           onClose={() => setQrStuId(null)}
         />
       )}
-    </div>
+      {showAdminGate && (
+        <AdminPinModal
+          pinDraft={pinDraft}
+          setPinDraft={setPinDraft}
+          pinError={pinError}
+          onSubmit={unlockAdmin}
+          onClose={() => {
+            setShowAdminGate(false);
+            setPinError("");
+            setPinDraft("");
+          }}
+        />
+      )}
+    </AdminDashboard>
   );
 }
 
-function EntranceView({ data, copyText, copied, openParentView }) {
+function EntranceView({ data, copyText, copied, openParentView, onBack }) {
   const [query, setQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
   const revealResults = query.trim().length >= 2;
@@ -525,6 +699,9 @@ function EntranceView({ data, copyText, copied, openParentView }) {
   return (
     <div style={{ minHeight: "100vh", background: CR, maxWidth: 520, margin: "0 auto", paddingBottom: 28, fontFamily: "'DM Sans',sans-serif" }}>
       <div style={{ background: G, color: "white", padding: "28px 20px 22px" }}>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>
+          ← Home
+        </button>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Entrance List</div>
         <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, lineHeight: 1.05, marginBottom: 6 }}>{data.evtName}</div>
         <div style={{ fontSize: 14, opacity: 0.82 }}>{data.school}</div>
@@ -562,7 +739,11 @@ function EntranceView({ data, copyText, copied, openParentView }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 16, fontWeight: 700, color: G }}>{student.child}</div>
-                  <div style={{ fontSize: 13, color: "#857A70", marginTop: 2 }}>{[cls?.name, `${activeTeacherCount} teachers`].filter(Boolean).join(" · ")}</div>
+                  <div style={{ fontSize: 13, color: "#857A70", marginTop: 2 }}>
+                    {activeTeacherCount
+                      ? [cls?.name, `${activeTeacherCount} teachers`].filter(Boolean).join(" · ")
+                      : [cls?.name, "Teacher list not assigned yet"].filter(Boolean).join(" · ")}
+                  </div>
                 </div>
                 <Btn amber onClick={() => openParentView(student, data)}>Open list</Btn>
               </div>
@@ -576,12 +757,191 @@ function EntranceView({ data, copyText, copied, openParentView }) {
   );
 }
 
-function TeachersTab({ school, setSchool, evtName, setEvtName, evtDate, setEvtDate, notesEmail, setNotesEmail, eventCode, setEventCode, teachers, setTeachers, onRemove, onResetDemo, onPublish, publishState, onDownloadSetup, onImportSetup }) {
+function HomeView({
+  school,
+  evtName,
+  evtDate,
+  eventCode,
+  cloudReady,
+  publishState,
+  teacherCount,
+  classCount,
+  studentCount,
+  onOpenEntrance,
+  onOpenAdmin,
+  onOpenEventQr,
+  adminConfigured,
+}) {
+  const statusLabel = cloudReady
+    ? publishState || "Parents can use the entrance search and meeting list."
+    : "Firebase config is missing, so sharing stays in local preview mode.";
+
+  return (
+    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
+      <div style={{ background: `linear-gradient(180deg, ${G} 0%, #264636 100%)`, color: "white", padding: "28px 20px 30px" }}>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Parent Entrance</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 34, lineHeight: 1.02, marginBottom: 10 }}>{school}</div>
+        <div style={{ fontSize: 18, opacity: 0.92, marginBottom: 4 }}>{evtName}</div>
+        {evtDate && <div style={{ fontSize: 13, opacity: 0.66 }}>{fmtDate(evtDate)}</div>}
+        <div style={{ marginTop: 22, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "18px 16px" }}>
+          <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92 }}>
+            Search for the student name and open the meeting checklist on the parent phone.
+          </div>
+          <Btn amber full onClick={onOpenEntrance} style={{ padding: "14px 16px", fontSize: 15, marginTop: 16 }}>Find my child</Btn>
+          <button onClick={onOpenAdmin} style={{ marginTop: 14, background: "transparent", color: "rgba(255,255,255,0.76)", border: "none", padding: 0, fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>
+            {adminConfigured ? "Staff login" : "Open staff dashboard"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        <Card>
+          <SLabel>Event Status</SLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
+            {[
+              { label: "Teachers", value: teacherCount },
+              { label: "Classes", value: classCount },
+              { label: "Students", value: studentCount },
+            ].map((item) => (
+              <div key={item.label} style={{ background: "#F8F4EE", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
+                <div style={{ fontFamily: "'Fraunces',serif", fontSize: 24, color: G }}>{item.value}</div>
+                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#8B8075", marginTop: 4 }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: cloudReady ? "#E8F0EC" : "#FFF0E3", borderRadius: 14, padding: "12px 14px", fontSize: 13, color: G, marginBottom: 14 }}>
+            {statusLabel}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", fontSize: 13, color: "#75695E", marginBottom: 14 }}>
+            <span>Event code</span>
+            <strong style={{ color: G, letterSpacing: 1 }}>{eventCode || "Not set"}</strong>
+          </div>
+          <Btn full light onClick={onOpenEventQr}>Show entrance QR</Btn>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function AdminDashboard({
+  school,
+  evtName,
+  evtDate,
+  notesEmail,
+  eventCode,
+  publishState,
+  cloudReady,
+  teacherCount,
+  classCount,
+  studentCount,
+  adminTab,
+  setAdminTab,
+  onBack,
+  onOpenEntrance,
+  onOpenEventQr,
+  onLock,
+  children,
+}) {
+  return (
+    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto" }}>
+      <div style={{ background: G, padding: "22px 20px 18px", color: "white" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            ← Parent screen
+          </button>
+          <button onClick={onLock} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            Lock staff
+          </button>
+        </div>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 28, lineHeight: 1.05, marginBottom: 6 }}>{school}</div>
+        <div style={{ fontSize: 15, opacity: 0.88 }}>{evtName}</div>
+        <div style={{ fontSize: 12, opacity: 0.58, marginTop: 4 }}>
+          {[evtDate ? fmtDate(evtDate) : "", notesEmail || "", eventCode ? `Code ${eventCode}` : ""].filter(Boolean).join(" · ")}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 18, marginBottom: 14 }}>
+          {[
+            { label: "Teachers", value: teacherCount },
+            { label: "Classes", value: classCount },
+            { label: "Students", value: studentCount },
+          ].map((item) => (
+            <div key={item.label} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22 }}>{item.value}</div>
+              <div style={{ fontSize: 11, opacity: 0.72, marginTop: 2 }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <Btn full amber onClick={onOpenEventQr}>Entrance QR</Btn>
+          <Btn full light onClick={onOpenEntrance}>Parent search</Btn>
+        </div>
+        {!cloudReady && (
+          <div style={{ background: "rgba(196,128,58,0.2)", borderRadius: 12, padding: "10px 12px", fontSize: 12, color: "#F7E8D8" }}>
+            Firebase config is missing. The dashboard still works, but cloud publishing is off.
+          </div>
+        )}
+        {cloudReady && publishState && (
+          <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "10px 12px", fontSize: 12, color: "white" }}>
+            {publishState}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", background: "#EEE7DD", padding: 6, gap: 6, margin: "14px 16px 0", borderRadius: 16 }}>
+        {[["teachers", "Teachers"], ["classes", "Classes"], ["students", "Students & QR"]].map(([tab, label]) => (
+          <button
+            key={tab}
+            onClick={() => setAdminTab(tab)}
+            style={{
+              flex: 1,
+              background: adminTab === tab ? "white" : "transparent",
+              color: adminTab === tab ? G : "#6F655B",
+              border: "none",
+              padding: "12px 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              borderRadius: 12,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+function TeachersTab({
+  school,
+  setSchool,
+  evtName,
+  setEvtName,
+  evtDate,
+  setEvtDate,
+  notesEmail,
+  setNotesEmail,
+  eventCode,
+  setEventCode,
+  teachers,
+  setTeachers,
+  onRemove,
+  onResetDemo,
+  onPublish,
+  publishState,
+  onDownloadSetup,
+  onImportSetup,
+  adminPin,
+  setAdminPin,
+}) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", subject: "", room: "", floor: "", time: "", status: "active", note: "" });
   const [editId, setEditId] = useState(null);
   const [editFm, setEditFm] = useState({});
   const fileInputRef = useRef(null);
+  const csvInputRef = useRef(null);
 
   const addT = () => {
     if (!form.name) return;
@@ -600,6 +960,30 @@ function TeachersTab({ school, setSchool, evtName, setEvtName, evtDate, setEvtDa
     if (!file) return;
     const text = await file.text();
     onImportSetup(JSON.parse(text));
+    event.target.value = "";
+  };
+
+  const importTeacherCsv = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCsv(text);
+    const nextTeachers = rows
+      .map((row) => ({
+        id: uid(),
+        name: row.name || row.teacher || row.teacher_name || "",
+        subject: row.subject || row.department || "",
+        room: row.location || row.meeting_location || row.room || "",
+        floor: row.floor || "",
+        time: row.time || "",
+        status: String(row.status || "active").toLowerCase() === "unavailable" ? "unavailable" : "active",
+        note: row.note || "",
+      }))
+      .filter((teacher) => teacher.name);
+
+    if (nextTeachers.length) {
+      setTeachers((previous) => [...previous, ...nextTeachers]);
+    }
     event.target.value = "";
   };
 
@@ -628,20 +1012,35 @@ function TeachersTab({ school, setSchool, evtName, setEvtName, evtDate, setEvtDa
         </div>
       </div>
 
+      <Card>
+        <SLabel>Staff Access</SLabel>
+        <input
+          value={adminPin}
+          onChange={(e) => setAdminPin(e.target.value)}
+          placeholder="Set a staff PIN"
+          style={{ ...iBase, marginBottom: 8 }}
+        />
+        <div style={{ fontSize: 12, color: "#75695E" }}>
+          This is a simple screen lock for staff tools. For stronger protection, real authentication would still be needed later.
+        </div>
+      </Card>
+
       <Row>
         <SHead>Teachers <N n={teachers.length} /></SHead>
         <div style={{ display: "flex", gap: 8 }}>
+          <Btn onClick={() => csvInputRef.current?.click()} light>Import CSV</Btn>
           <Btn onClick={onResetDemo} light>Reset Demo</Btn>
           <Btn onClick={() => setShowAdd((p) => !p)} amber={!showAdd}>{showAdd ? "Cancel" : "+ Add"}</Btn>
         </div>
       </Row>
+      <input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={importTeacherCsv} style={{ display: "none" }} />
 
       {showAdd && (
         <Card border>
           <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Full name *" style={{ ...iBase, marginBottom: 8 }} />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <input value={form.subject} onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject" style={iBase} />
-            <input value={form.room} onChange={(e) => setForm((p) => ({ ...p, room: e.target.value }))} placeholder="Room / Class" style={iBase} />
+            <input value={form.room} onChange={(e) => setForm((p) => ({ ...p, room: e.target.value }))} placeholder="Meeting location" style={iBase} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <input value={form.floor} onChange={(e) => setForm((p) => ({ ...p, floor: e.target.value }))} placeholder="Floor" style={iBase} />
@@ -664,8 +1063,8 @@ function TeachersTab({ school, setSchool, evtName, setEvtName, evtDate, setEvtDa
             <>
               <input value={editFm.name || ""} onChange={(e) => setEditFm((p) => ({ ...p, name: e.target.value }))} style={{ ...iBase, marginBottom: 8 }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <input value={editFm.subject || ""} onChange={(e) => setEditFm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject" style={iBase} />
-                <input value={editFm.room || ""} onChange={(e) => setEditFm((p) => ({ ...p, room: e.target.value }))} placeholder="Room / Class" style={iBase} />
+              <input value={editFm.subject || ""} onChange={(e) => setEditFm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject" style={iBase} />
+                <input value={editFm.room || ""} onChange={(e) => setEditFm((p) => ({ ...p, room: e.target.value }))} placeholder="Meeting location" style={iBase} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                 <input value={editFm.floor || ""} onChange={(e) => setEditFm((p) => ({ ...p, floor: e.target.value }))} placeholder="Floor" style={iBase} />
@@ -768,6 +1167,7 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
   const [bulkText, setBulkText] = useState("");
   const [bulkCid, setBulkCid] = useState("");
   const [filter, setFilter] = useState("all");
+  const csvInputRef = useRef(null);
 
   const addOne = () => {
     if (!form.child) return;
@@ -785,6 +1185,30 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
 
   const visible = students.filter((s) => filter === "all" || s.cid === Number(filter));
 
+  const importStudentCsv = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCsv(text);
+    const classLookup = new Map(classes.map((item) => [String(item.name).trim().toLowerCase(), item.id]));
+    const nextStudents = rows
+      .map((row) => {
+        const className = (row.class || row.class_name || row.classroom || "").trim().toLowerCase();
+        return {
+          id: uid(),
+          child: row.child || row.student || row.student_name || "",
+          parent: row.parent || row.parent_name || "",
+          cid: classLookup.has(className) ? classLookup.get(className) : null,
+        };
+      })
+      .filter((student) => student.child);
+
+    if (nextStudents.length) {
+      setStudents((previous) => [...previous, ...nextStudents]);
+    }
+    event.target.value = "";
+  };
+
   return (
     <div>
       <Card>
@@ -801,10 +1225,12 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
       <Row>
         <SHead>Students <N n={students.length} /></SHead>
         <div style={{ display: "flex", gap: 6 }}>
+          <Btn onClick={() => csvInputRef.current?.click()} light>Import CSV</Btn>
           <Btn onClick={() => { setBulk((p) => !p); setShowAdd(false); }} light>{bulk ? "Cancel" : "Bulk ↓"}</Btn>
           <Btn onClick={() => { setShowAdd((p) => !p); setBulk(false); }} amber={!showAdd}>{showAdd ? "Cancel" : "+ Add"}</Btn>
         </div>
       </Row>
+      <input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={importStudentCsv} style={{ display: "none" }} />
 
       {showAdd && (
         <Card border>
@@ -882,6 +1308,35 @@ function QrModal({ title, subtitle, imageUrl, footer, primaryLabel, secondaryLab
         <button onClick={onPrimary} style={{ width: "100%", background: "#F0EBE3", color: G, border: "none", borderRadius: 12, padding: 11, fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: secondaryLabel ? 8 : 10 }}>{primaryLabel}</button>
         {secondaryLabel && <button onClick={onSecondary} style={{ width: "100%", background: "#E8F0EC", color: G, border: "none", borderRadius: 12, padding: 11, fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 8 }}>{secondaryLabel}</button>}
         <button onClick={onClose} style={{ width: "100%", background: G, color: "white", border: "none", borderRadius: 12, padding: 11, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+function AdminPinModal({ pinDraft, setPinDraft, pinError, onSubmit, onClose }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }} onClick={(event) => event.stopPropagation()}>
+        <div style={{ fontFamily: "'Fraunces',serif", fontSize: 24, color: G, marginBottom: 6 }}>Staff login</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: "#75695E", marginBottom: 14 }}>
+          Enter the staff PIN to open the dashboard.
+        </div>
+        <input
+          autoFocus
+          type="password"
+          value={pinDraft}
+          onChange={(event) => setPinDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onSubmit();
+          }}
+          placeholder="PIN"
+          style={{ ...iBase, marginBottom: 10 }}
+        />
+        {pinError && <div style={{ fontSize: 12, color: "#C24646", marginBottom: 10 }}>{pinError}</div>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn full light onClick={onClose}>Cancel</Btn>
+          <Btn full onClick={onSubmit}>Open dashboard</Btn>
+        </div>
       </div>
     </div>
   );

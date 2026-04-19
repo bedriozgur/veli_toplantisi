@@ -2,13 +2,19 @@ import { initializeApp } from "firebase/app";
 import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 
 let dbInstance = null;
+const PUBLIC_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAh_NW992P4NEq6k8PUwBnNm7FdUa3JPTs",
+  authDomain: "veli-toplantisi.firebaseapp.com",
+  projectId: "veli-toplantisi",
+  appId: "1:654002086861:web:6d1c82d5e4495e04971a84",
+};
 
 function getConfig() {
   return {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || PUBLIC_FIREBASE_CONFIG.apiKey,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || PUBLIC_FIREBASE_CONFIG.authDomain,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || PUBLIC_FIREBASE_CONFIG.projectId,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || PUBLIC_FIREBASE_CONFIG.appId,
   };
 }
 
