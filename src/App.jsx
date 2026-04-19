@@ -33,9 +33,58 @@ import {
   TEACHER_TEMPLATE_CSV,
 } from "./utils/importData";
 
-const G = "#1B3A2D";
-const A = "#C4803A";
-const CR = "#F5F0E8";
+const G = "#3A5673";
+const G2 = "#4A6A8A";
+const A = "#D4A73F";
+const CR = "#F2EEE8";
+
+const TRANSLATIONS = {
+  en: {
+    welcomeTop: "Welcome to the School Meeting Portal",
+    loginTitle: "Enter the meeting code to view your meeting plan, teachers, and locations.",
+    enterCode: "Enter the Meeting Code",
+    loginButton: "Login to the Meeting Portal",
+    howToStart: "How To Start",
+    defaultStatus: "Enter the meeting code from the school to open your meeting plan.",
+    cloudUnavailable: "Cloud event lookup is unavailable on this build.",
+    defaultNote: "Parents can scan the printed QR code or enter the meeting code provided by the school.",
+    staffLogin: "Staff login",
+    staffDashboard: "Staff dashboard",
+    languageSwitch: "TR",
+    landingSchoolFallback: "School Meeting Portal",
+    landingEventFallback: "Parent and teacher meeting access",
+    home: "Home",
+    meetingLookup: "Meeting Lookup",
+    parentScreen: "Parent screen",
+    lockStaff: "Lock staff",
+    staffDashboardTitle: "Staff Dashboard",
+    parentMeetings: "Parent meetings",
+    meetingPlan: "Meeting Plan"
+  },
+  tr: {
+    welcomeTop: "Okul Toplantı Portalına Hoş Geldiniz",
+    loginTitle: "Toplantı planınızı, öğretmenlerinizi ve toplantı yerlerini görmek için toplantı kodunu girin.",
+    enterCode: "Toplantı Kodunu Girin",
+    loginButton: "Toplantı Portalına Giriş",
+    howToStart: "Nasıl Başlanır",
+    defaultStatus: "Toplantı planınızı açmak için okulun verdiği toplantı kodunu girin.",
+    cloudUnavailable: "Bu sürümde bulut etkinlik erişimi kullanılamıyor.",
+    defaultNote: "Veliler, basılı QR kodu tarayabilir veya okulun verdiği toplantı kodunu girebilir.",
+    staffLogin: "Personel girişi",
+    staffDashboard: "Personel paneli",
+    languageSwitch: "EN",
+    landingSchoolFallback: "Okul Toplantı Portalı",
+    landingEventFallback: "Veli ve öğretmen toplantı erişimi",
+    home: "Ana Sayfa",
+    meetingLookup: "Toplantı Arama",
+    parentScreen: "Veli ekranı",
+    lockStaff: "Personeli kilitle",
+    staffDashboardTitle: "Personel Paneli",
+    parentMeetings: "Veli toplantıları",
+    meetingPlan: "Toplantı Planı"
+  }
+};
+
 const STORAGE_KEY = "pe_admin_v2";
 const PARENT_KEY_PREFIX = "pe_parent_v2:";
 const ADMIN_PIN_KEY = "pe_admin_pin";
@@ -203,6 +252,13 @@ export default function App() {
   const [pinError, setPinError] = useState("");
   const [landingCode, setLandingCode] = useState("");
   const [landingError, setLandingError] = useState("");
+  const [language, setLanguage] = useState(() => safeGetStorage("portal_lang") || "en");
+  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
+
+
+  useEffect(() => {
+    safeSetStorage("portal_lang", language);
+  }, [language]);
 
   const openParentState = async (raw) => {
     if (raw?.eventCode && raw?.studentId && cloudReady) {
@@ -216,7 +272,7 @@ export default function App() {
         );
       }
       const student = (remoteEvent.students || []).find((item) => item.id === raw.studentId);
-      if (!student) throw new Error("Student not found in event.");
+      if (!student) throw new Error("Family record not found in event.");
       const payload = buildParentPayload(remoteEvent, student);
       const localProgress = loadParentMeetings(payload.keyId, payload.teachers);
       const remoteProgress = await loadProgress(raw.eventCode, raw.studentId);
@@ -437,7 +493,7 @@ export default function App() {
     const url = studentUrl(student);
     if (navigator.share) {
       try {
-        await navigator.share({ title: `${evtName} - ${student.child}`, text: `${student.child} meeting list`, url });
+        await navigator.share({ title: `${evtName} - ${student.child}`, text: `${student.child} meeting plan`, url });
         return;
       } catch {}
     }
@@ -631,7 +687,7 @@ export default function App() {
       `${pData.evtName} — ${pData.school}` +
       `${dateStr ? `\n${dateStr}` : ""}` +
       `${timeStr ? `\n${timeStr}` : ""}` +
-      `${pData.child ? `\nStudent: ${pData.child}` : ""}` +
+      `${pData.child ? `\nChild: ${pData.child}` : ""}` +
       `${pData.className ? `\nClass: ${pData.className}` : ""}` +
       `\n${"─".repeat(38)}\n\n`;
 
@@ -653,7 +709,7 @@ export default function App() {
   if (mode === "error") return <ErrorScreen message={bootError} />;
 
   if (mode === "entrance" && entranceData) {
-    return <EntranceView data={entranceData} copyText={copyText} copied={copied} openParentView={openParentView} onBack={goHome} />;
+    return <EntranceView data={entranceData} copyText={copyText} copied={copied} openParentView={openParentView} onBack={goHome} language={language} setLanguage={setLanguage} t={t} />;
   }
 
   if (mode === "parent" && pData) {
@@ -667,6 +723,17 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 480, margin: "0 auto", paddingBottom: 100 }}>
         <div style={{ background: G, padding: "26px 20px 24px", color: "white" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <button onClick={goHome} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            ← {t.home}
+          </button>
+          <button
+            onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
+            style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+          >
+            {t.languageSwitch}
+          </button>
+        </div>
           <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>{pData.school}</div>
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 30, fontWeight: 800, lineHeight: 1.08, marginBottom: 4 }}>{pData.evtName}</div>
           {pData.child && <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.88, marginBottom: 2 }}>{pData.child}{pData.parent ? ` · ${pData.parent}` : ""}</div>}
@@ -697,7 +764,7 @@ export default function App() {
             <Card>
               <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800, color: G, marginBottom: 8 }}>No teachers assigned yet</div>
               <div style={{ fontSize: 14, lineHeight: 1.55, color: "#75695E" }}>
-                This class does not have a meeting list yet. Please check with the staff desk.
+                This family does not have a meeting plan yet. Please check with the staff desk.
               </div>
             </Card>
           )}
@@ -784,6 +851,9 @@ export default function App() {
     return (
       <>
         <HomeView
+          language={language}
+          setLanguage={setLanguage}
+          t={t}
           cloudReady={cloudReady}
           publishState={publishState}
           onOpenEntrance={openEntranceByCode}
@@ -804,7 +874,7 @@ export default function App() {
         {showEventQr && (
           <QrModal
             title="Entrance QR"
-            subtitle={cloudReady ? "Parents scan, type the student name, and open their checklist from a short event link." : "Firebase config missing, so this falls back to local-only QR data."}
+            subtitle={cloudReady ? "Parents scan, type the child name, and open the meeting plan from a short event link." : "Firebase config missing, so this falls back to local-only QR data."}
             imageUrl={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(eventUrl)}&bgcolor=F5F0E8&color=1B3A2D&margin=6`}
             footer={cloudReady ? `Event code ${eventCode}` : "Configure Firebase env vars for cloud mode"}
             primaryLabel={copied === "event-link" ? "✓ Link copied" : "Copy entrance link"}
@@ -833,6 +903,9 @@ export default function App() {
 
   return (
     <AdminDashboard
+      language={language}
+      setLanguage={setLanguage}
+      t={t}
       school={school}
       schoolLogo={schoolLogo}
       evtName={evtName}
@@ -909,7 +982,7 @@ export default function App() {
       {showEventQr && (
         <QrModal
           title="Entrance QR"
-          subtitle={cloudReady ? "Parents scan, type the student name, and open their checklist from a short event link." : "Firebase config missing, so this falls back to local-only QR data."}
+          subtitle={cloudReady ? "Parents scan, type the child name, and open the meeting plan from a short event link." : "Firebase config missing, so this falls back to local-only QR data."}
           imageUrl={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(eventUrl)}&bgcolor=F5F0E8&color=1B3A2D&margin=6`}
           footer={cloudReady ? `Event code ${eventCode}` : "Configure Firebase env vars for cloud mode"}
           primaryLabel={copied === "event-link" ? "✓ Link copied" : "Copy entrance link"}
@@ -920,14 +993,14 @@ export default function App() {
 
       {qrStu && (
         <QrModal
-          title={qrStu.child}
+          title={qrStu.parent ? `${qrStu.parent} · ${qrStu.child}` : qrStu.child}
           subtitle={`${classes.find((c) => c.id === qrStu.cid)?.name || ""}${qrStu.parent ? ` · ${qrStu.parent}` : ""}`}
           imageUrl={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(studentUrl(qrStu))}&bgcolor=F5F0E8&color=1B3A2D&margin=6`}
           footer={`${(() => {
             const cls = classes.find((c) => c.id === qrStu.cid);
             return cls ? teachers.filter((t) => (cls.tids || []).includes(t.id) && t.status !== "unavailable").length : 0;
           })()} teachers on this list`}
-          primaryLabel={copied === `student-${qrStu.id}` ? "✓ Link copied" : "Copy student link"}
+          primaryLabel={copied === `student-${qrStu.id}` ? "✓ Link copied" : "Copy family link"}
           secondaryLabel="Share"
           onPrimary={() => copyText(studentUrl(qrStu), `student-${qrStu.id}`)}
           onSecondary={() => shareStudentCard(qrStu)}
@@ -951,7 +1024,7 @@ export default function App() {
   );
 }
 
-function EntranceView({ data, copyText, copied, openParentView, onBack }) {
+function EntranceView({ data, copyText, copied, openParentView, onBack, language, setLanguage, t }) {
   const [query, setQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
   const revealResults = query.trim().length >= 2;
@@ -967,10 +1040,18 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
   return (
     <div style={{ minHeight: "100vh", background: CR, maxWidth: 520, margin: "0 auto", paddingBottom: 28, fontFamily: "'DM Sans',sans-serif" }}>
       <div style={{ background: G, color: "white", padding: "28px 20px 22px" }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>
-          ← Home
-        </button>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Entrance List</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            ← {t.home}
+          </button>
+          <button
+            onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
+            style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+          >
+            {t.languageSwitch}
+          </button>
+        </div>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>{t.meetingLookup}</div>
         <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{data.evtName}</div>
         <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.86 }}>{data.school}</div>
         <div style={{ fontSize: 13, opacity: 0.62, marginTop: 4 }}>
@@ -985,7 +1066,7 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
 
       <div style={{ padding: 16 }}>
         <Card>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search student name" style={{ ...iBase, marginBottom: 10 }} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search child name" style={{ ...iBase, marginBottom: 10 }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
             <Chip label={`All classes (${(data.students || []).length})`} active={selectedClass === "all"} onClick={() => setSelectedClass("all")} />
             {(data.classes || []).map((cls) => (
@@ -1023,13 +1104,16 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
           );
         })}
 
-        {revealResults && !visibleStudents.length && <Empty>No matching students found</Empty>}
+        {revealResults && !visibleStudents.length && <Empty>No matching families found</Empty>}
       </div>
     </div>
   );
 }
 
 function HomeView({
+  language,
+  setLanguage,
+  t,
   cloudReady,
   publishState,
   onOpenEntrance,
@@ -1047,24 +1131,37 @@ function HomeView({
   landingHelpText,
   landingNoteText,
 }) {
+
   const statusLabel = cloudReady
-    ? publishState || "Enter the meeting code from the school to open the student list."
-    : "Cloud event lookup is unavailable on this build.";
+    ? publishState || t.defaultStatus
+    : t.cloudUnavailable;
   const showNeutralBrand = !schoolLogo && (!school || school === DEFAULT_SCHOOL) && (!evtName || evtName === DEFAULT_EVENT);
-  const landingSchool = showNeutralBrand ? "School Meeting Portal" : school;
-  const landingEvent = showNeutralBrand ? "Parent and teacher meeting access" : evtName;
+  const landingSchool = showNeutralBrand ? t.landingSchoolFallback : school;
+  const landingEvent = showNeutralBrand ? t.landingEventFallback : evtName;
 
   return (
-    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
-      <div style={{ background: `linear-gradient(180deg, ${G} 0%, #264636 100%)`, color: "white", padding: "28px 20px 42px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
-          <div style={{ fontSize: 10, letterSpacing: 4, textTransform: opacity: 0.55 }}>Welcome to the School Meeting Portal</div>
-          <button onClick={onOpenAdmin} style={{ background: "transparent", color: "rgba(255,255,255,0.76)", border: "none", padding: 0, fontSize: 13, textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>
-            {adminConfigured ? "Staff login" : "Staff dashboard"}
+    <div style={{ minHeight: "100vh", background: "#FFFFFF", fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto" }}>
+      <div style={{ background: `linear-gradient(180deg, ${G2} 0%, ${G} 100%)`, color: "white", padding: "28px 20px 42px" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
+            style={{
+              background: "rgba(255,255,255,0.14)",
+              color: "white",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: 999,
+              padding: "6px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+          >
+            {t.languageSwitch}
           </button>
         </div>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, textAlign: "center", marginBottom: 8 }}>{t.welcomeTop}</div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 34, marginBottom: 22 }}>
-          <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: schoolLogo ? 18 : 0, boxSizing: "border-box" }}>
+          <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: schoolLogo ? 18 : 0, boxSizing: "border-box" }}>
             {schoolLogo ? (
               <img src={schoolLogo} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
             ) : (
@@ -1079,9 +1176,9 @@ function HomeView({
             {[evtDate ? fmtDate(evtDate) : "", fmtEventWindow(startTime, endTime)].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <div style={{ marginTop: 22, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "18px 16px" }}>
-          <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92, textAlign: "center" }}>
-            Welcome to the school. Enter the meeting code to find your child, view the teacher list, and see each meeting location.
+        <div style={{ marginTop: 22, background: "rgba(255,255,255,0.20)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(6px)", borderRadius: 20, padding: "18px 16px" }}>
+          <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.92)", textAlign: "center" }}>
+            {t.loginTitle}
           </div>
           <input
             value={landingCode}
@@ -1089,32 +1186,54 @@ function HomeView({
             onKeyDown={(event) => {
               if (event.key === "Enter") onOpenEntrance(landingCode);
             }}
-            placeholder="Enter meeting code"
-            style={{ ...iBase, marginTop: 16, background: "rgba(255,255,255,0.96)" }}
+            placeholder={t.enterCode}
+            style={{ ...iBase, marginTop: 16, background: "rgba(255,255,255,0.98)", textAlign: "center", borderColor: "rgba(212,167,63,0.25)", color: "#4B5563" }}
           />
           <Btn amber full onClick={() => onOpenEntrance(landingCode)} style={{ padding: "14px 16px", fontSize: 15, marginTop: 10 }}>
-            Login to meeting portal
+            {t.loginButton}
           </Btn>
           {landingError && <div style={{ marginTop: 10, fontSize: 12, color: "#FFD5D5" }}>{landingError}</div>}
         </div>
       </div>
 
-      <div style={{ padding: 16 }}>
+      <div style={{ background: CR, padding: "16px 16px 14px" }}>
         <Card>
-          <SLabel>How To Start</SLabel>
+          <SLabel>{t.howToStart}</SLabel>
           <div style={{ background: cloudReady ? "#E8F0EC" : "#FFF0E3", borderRadius: 14, padding: "12px 14px", fontSize: 13, color: G, marginBottom: 14 }}>
             {landingHelpText || statusLabel}
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6, color: "#75695E" }}>
-            {landingNoteText || "Parents should scan the printed QR code or enter the meeting code provided by the school. Staff can sign in from the link above."}
+            {landingNoteText || t.defaultNote}
           </div>
+
         </Card>
+      </div>
+
+      <div style={{ background: "#FFFFFF", padding: "10px 16px 24px", textAlign: "center" }}>
+        <button
+          onClick={onOpenAdmin}
+          style={{
+            background: "transparent",
+            color: "rgba(58, 86, 115, 0.42)",
+            border: "none",
+            padding: 0,
+            fontSize: 11,
+            textDecoration: "none",
+            cursor: "pointer",
+            display: "inline-block"
+          }}
+        >
+          {adminConfigured ? t.staffLogin : t.staffDashboard}
+        </button>
       </div>
     </div>
   );
 }
 
 function AdminDashboard({
+  language,
+  setLanguage,
+  t,
   school,
   schoolLogo,
   evtName,
@@ -1141,18 +1260,26 @@ function AdminDashboard({
       <div style={{ background: G, padding: "22px 20px 18px", color: "white" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <button onClick={onBack} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            ← Parent screen
+            ← {t.parentScreen}
           </button>
-          <button onClick={onLock} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            Lock staff
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
+              style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >
+              {t.languageSwitch}
+            </button>
+            <button onClick={onLock} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              {t.lockStaff}
+            </button>
+          </div>
         </div>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>{t.staffDashboardTitle}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           {schoolLogo ? (
             <img src={schoolLogo} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: CR, padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
               {schoolInitials(school) || "SM"}
             </div>
           )}
@@ -1168,7 +1295,7 @@ function AdminDashboard({
           {[
             { label: "Teachers", value: teacherCount },
             { label: "Classes", value: classCount },
-            { label: "Students", value: studentCount },
+            { label: "Families", value: studentCount },
           ].map((item) => (
             <div key={item.label} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800 }}>{item.value}</div>
@@ -1178,7 +1305,7 @@ function AdminDashboard({
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           <Btn full amber onClick={onOpenEventQr}>Entrance QR</Btn>
-          <Btn full light onClick={onOpenEntrance}>Parent search</Btn>
+          <Btn full light onClick={onOpenEntrance}>Family lookup</Btn>
         </div>
         {!cloudReady && (
           <div style={{ background: "rgba(196,128,58,0.2)", borderRadius: 12, padding: "10px 12px", fontSize: 12, color: "#F7E8D8" }}>
@@ -1193,7 +1320,7 @@ function AdminDashboard({
       </div>
 
       <div style={{ display: "flex", background: "#EEE7DD", padding: 6, gap: 6, margin: "14px 16px 0", borderRadius: 16 }}>
-        {[["settings", "Settings"], ["teachers", "Teachers"], ["classes", "Classes"], ["students", "Students & QR"]].map(([tab, label]) => (
+        {[["settings", "Settings"], ["teachers", "Teachers"], ["classes", "Classes"], ["students", "Families & QR"]].map(([tab, label]) => (
           <button
             key={tab}
             onClick={() => setAdminTab(tab)}
@@ -1610,7 +1737,7 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
       <Card>
         <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800, color: G, marginBottom: 6 }}>Entrance Sharing</div>
         <div style={{ fontSize: 14, color: "#7D746C", marginBottom: 12 }}>
-          {cloudReady ? "Use one entrance QR after publishing the event to Firebase." : "Firebase config missing, so only per-student QR links will work reliably."}
+          {cloudReady ? "Use one entrance QR after publishing the event to Firebase." : "Firebase config missing, so only per-family QR links will work reliably."}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn full onClick={onOpenEventQr}>Open Entrance QR</Btn>
@@ -1619,7 +1746,7 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
       </Card>
 
       <Row>
-        <SHead>Students <N n={students.length} /></SHead>
+        <SHead>Families <N n={students.length} /></SHead>
         <div style={{ display: "flex", gap: 6 }}>
           <Btn onClick={downloadStudentTemplate} light>Example CSV</Btn>
           <Btn onClick={() => csvInputRef.current?.click()} light>Import CSV</Btn>
@@ -1631,13 +1758,13 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
 
       {showAdd && (
         <Card border>
-          <input value={form.child} onChange={(e) => setForm((p) => ({ ...p, child: e.target.value }))} placeholder="Student name *" style={{ ...iBase, marginBottom: 8 }} />
+          <input value={form.child} onChange={(e) => setForm((p) => ({ ...p, child: e.target.value }))} placeholder="Child name *" style={{ ...iBase, marginBottom: 8 }} />
           <input value={form.parent} onChange={(e) => setForm((p) => ({ ...p, parent: e.target.value }))} placeholder="Parent name" style={{ ...iBase, marginBottom: 8 }} />
           <select value={form.cid} onChange={(e) => setForm((p) => ({ ...p, cid: e.target.value }))} style={{ ...iBase, marginBottom: 12 }}>
             <option value="">Assign to class…</option>
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <Btn onClick={addOne} amber full>Add Student</Btn>
+          <Btn onClick={addOne} amber full>Add Family</Btn>
         </Card>
       )}
 
@@ -1648,7 +1775,7 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
             <option value="">Assign to class…</option>
             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <Btn onClick={addBulk} amber full disabled={!bulkText.trim()}>Add {bulkText.split("\n").filter((n) => n.trim()).length} Students</Btn>
+          <Btn onClick={addBulk} amber full disabled={!bulkText.trim()}>Add {bulkText.split("\n").filter((n) => n.trim()).length} Families</Btn>
         </Card>
       )}
 
