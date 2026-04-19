@@ -37,54 +37,6 @@ const G = "#3A5673";
 const G2 = "#4A6A8A";
 const A = "#D4A73F";
 const CR = "#F2EEE8";
-
-const TRANSLATIONS = {
-  en: {
-    welcomeTop: "Welcome to the School Meeting Portal",
-    loginTitle: "Enter the meeting code to view your meeting plan, teachers, and locations.",
-    enterCode: "Enter the Meeting Code",
-    loginButton: "Login to the Meeting Portal",
-    howToStart: "How To Start",
-    defaultStatus: "Enter the meeting code from the school to open your meeting plan.",
-    cloudUnavailable: "Cloud event lookup is unavailable on this build.",
-    defaultNote: "Parents can scan the printed QR code or enter the meeting code provided by the school.",
-    staffLogin: "Staff login",
-    staffDashboard: "Staff dashboard",
-    languageSwitch: "TR",
-    landingSchoolFallback: "School Meeting Portal",
-    landingEventFallback: "Parent and teacher meeting access",
-    home: "Home",
-    meetingLookup: "Meeting Lookup",
-    parentScreen: "Parent screen",
-    lockStaff: "Lock staff",
-    staffDashboardTitle: "Staff Dashboard",
-    parentMeetings: "Parent meetings",
-    meetingPlan: "Meeting Plan"
-  },
-  tr: {
-    welcomeTop: "Okul Toplantı Portalına Hoş Geldiniz",
-    loginTitle: "Toplantı planınızı, öğretmenlerinizi ve toplantı yerlerini görmek için toplantı kodunu girin.",
-    enterCode: "Toplantı Kodunu Girin",
-    loginButton: "Toplantı Portalına Giriş",
-    howToStart: "Nasıl Başlanır",
-    defaultStatus: "Toplantı planınızı açmak için okulun verdiği toplantı kodunu girin.",
-    cloudUnavailable: "Bu sürümde bulut etkinlik erişimi kullanılamıyor.",
-    defaultNote: "Veliler, basılı QR kodu tarayabilir veya okulun verdiği toplantı kodunu girebilir.",
-    staffLogin: "Personel girişi",
-    staffDashboard: "Personel paneli",
-    languageSwitch: "EN",
-    landingSchoolFallback: "Okul Toplantı Portalı",
-    landingEventFallback: "Veli ve öğretmen toplantı erişimi",
-    home: "Ana Sayfa",
-    meetingLookup: "Toplantı Arama",
-    parentScreen: "Veli ekranı",
-    lockStaff: "Personeli kilitle",
-    staffDashboardTitle: "Personel Paneli",
-    parentMeetings: "Veli toplantıları",
-    meetingPlan: "Toplantı Planı"
-  }
-};
-
 const STORAGE_KEY = "pe_admin_v2";
 const PARENT_KEY_PREFIX = "pe_parent_v2:";
 const ADMIN_PIN_KEY = "pe_admin_pin";
@@ -253,12 +205,6 @@ export default function App() {
   const [landingCode, setLandingCode] = useState("");
   const [landingError, setLandingError] = useState("");
   const [language, setLanguage] = useState(() => safeGetStorage("portal_lang") || "en");
-  const t = TRANSLATIONS[language] || TRANSLATIONS.en;
-
-
-  useEffect(() => {
-    safeSetStorage("portal_lang", language);
-  }, [language]);
 
   const openParentState = async (raw) => {
     if (raw?.eventCode && raw?.studentId && cloudReady) {
@@ -443,6 +389,10 @@ export default function App() {
   useEffect(() => {
     safeSetStorage(ADMIN_UNLOCK_KEY, adminUnlocked ? "yes" : "no");
   }, [adminUnlocked]);
+
+  useEffect(() => {
+    safeSetStorage("portal_lang", language);
+  }, [language]);
 
   useEffect(() => {
     if (mode !== "parent" || !pData?.keyId) return;
@@ -705,11 +655,11 @@ export default function App() {
     )}&body=${encodeURIComponent(body)}`;
   };
 
-  if (loading) return <LoadingScreen label="Loading event" />;
-  if (mode === "error") return <ErrorScreen message={bootError} />;
+  if (loading) return <LoadingScreen label="Loading event" language={language} setLanguage={setLanguage} />;
+  if (mode === "error") return <ErrorScreen message={bootError} language={language} setLanguage={setLanguage} />;
 
   if (mode === "entrance" && entranceData) {
-    return <EntranceView data={entranceData} copyText={copyText} copied={copied} openParentView={openParentView} onBack={goHome} language={language} setLanguage={setLanguage} t={t} />;
+    return <EntranceView data={entranceData} copyText={copyText} copied={copied} openParentView={openParentView} onBack={goHome} language={language} setLanguage={setLanguage} />;
   }
 
   if (mode === "parent" && pData) {
@@ -721,19 +671,9 @@ export default function App() {
     const all = done === total && total > 0;
 
     return (
-      <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 480, margin: "0 auto", paddingBottom: 100 }}>
+      <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 480, margin: "0 auto", paddingBottom: 100, position: "relative" }}>
+        <LanguageToggle language={language} setLanguage={setLanguage} dark />
         <div style={{ background: G, padding: "26px 20px 24px", color: "white" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <button onClick={goHome} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            ← {t.home}
-          </button>
-          <button
-            onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
-            style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-          >
-            {t.languageSwitch}
-          </button>
-        </div>
           <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>{pData.school}</div>
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 30, fontWeight: 800, lineHeight: 1.08, marginBottom: 4 }}>{pData.evtName}</div>
           {pData.child && <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.88, marginBottom: 2 }}>{pData.child}{pData.parent ? ` · ${pData.parent}` : ""}</div>}
@@ -851,9 +791,6 @@ export default function App() {
     return (
       <>
         <HomeView
-          language={language}
-          setLanguage={setLanguage}
-          t={t}
           cloudReady={cloudReady}
           publishState={publishState}
           onOpenEntrance={openEntranceByCode}
@@ -870,6 +807,8 @@ export default function App() {
           endTime={endTime}
           landingHelpText={landingHelpText}
           landingNoteText={landingNoteText}
+          language={language}
+          setLanguage={setLanguage}
         />
         {showEventQr && (
           <QrModal
@@ -903,9 +842,6 @@ export default function App() {
 
   return (
     <AdminDashboard
-      language={language}
-      setLanguage={setLanguage}
-      t={t}
       school={school}
       schoolLogo={schoolLogo}
       evtName={evtName}
@@ -925,6 +861,8 @@ export default function App() {
       onOpenEntrance={openEntranceView}
       onOpenEventQr={() => setShowEventQr(true)}
       onLock={lockAdmin}
+      language={language}
+      setLanguage={setLanguage}
     >
       <div style={{ padding: "18px 16px 120px" }}>
         {adminTab === "teachers" && (
@@ -1024,7 +962,7 @@ export default function App() {
   );
 }
 
-function EntranceView({ data, copyText, copied, openParentView, onBack, language, setLanguage, t }) {
+function EntranceView({ data, copyText, copied, openParentView, onBack, language, setLanguage }) {
   const [query, setQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("all");
   const revealResults = query.trim().length >= 2;
@@ -1038,20 +976,13 @@ function EntranceView({ data, copyText, copied, openParentView, onBack, language
   }, [data.students, query, selectedClass, revealResults]);
 
   return (
-    <div style={{ minHeight: "100vh", background: CR, maxWidth: 520, margin: "0 auto", paddingBottom: 28, fontFamily: "'DM Sans',sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: CR, maxWidth: 520, margin: "0 auto", paddingBottom: 28, fontFamily: "'DM Sans',sans-serif", position: "relative" }}>
+      <LanguageToggle language={language} setLanguage={setLanguage} dark />
       <div style={{ background: G, color: "white", padding: "28px 20px 22px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            ← {t.home}
-          </button>
-          <button
-            onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
-            style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-          >
-            {t.languageSwitch}
-          </button>
-        </div>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>{t.meetingLookup}</div>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.14)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>
+          ← Home
+        </button>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Meeting Lookup</div>
         <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{data.evtName}</div>
         <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.86 }}>{data.school}</div>
         <div style={{ fontSize: 13, opacity: 0.62, marginTop: 4 }}>
@@ -1111,9 +1042,6 @@ function EntranceView({ data, copyText, copied, openParentView, onBack, language
 }
 
 function HomeView({
-  language,
-  setLanguage,
-  t,
   cloudReady,
   publishState,
   onOpenEntrance,
@@ -1130,36 +1058,31 @@ function HomeView({
   endTime,
   landingHelpText,
   landingNoteText,
+  language,
+  setLanguage,
 }) {
-
   const statusLabel = cloudReady
-    ? publishState || t.defaultStatus
-    : t.cloudUnavailable;
+    ? publishState || "Enter the meeting code from the school to open your meeting plan."
+    : "Cloud event lookup is unavailable on this build.";
   const showNeutralBrand = !schoolLogo && (!school || school === DEFAULT_SCHOOL) && (!evtName || evtName === DEFAULT_EVENT);
-  const landingSchool = showNeutralBrand ? t.landingSchoolFallback : school;
-  const landingEvent = showNeutralBrand ? t.landingEventFallback : evtName;
+  const landingSchool = showNeutralBrand ? "School Meeting Portal" : school;
+  const landingEvent = showNeutralBrand ? "Parent and teacher meeting access" : evtName;
+  const topWelcome = language === "tr" ? "Okul Toplantı Portalına Hoş Geldiniz" : "Welcome to the School Meeting Portal";
+  const entryPrompt = language === "tr" ? "Toplantı kodunuzu girin" : "Enter your meeting code";
+  const loginLabel = language === "tr" ? "Toplantı Portalına Giriş" : "Login to the Meeting Portal";
+  const howToStartLabel = language === "tr" ? "Nasıl Başlanır" : "How To Start";
+  const langButtonLabel = language === "tr" ? "EN" : "TR";
 
   return (
     <div style={{ minHeight: "100vh", background: "#FFFFFF", fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto" }}>
-      <div style={{ background: `linear-gradient(180deg, ${G2} 0%, ${G} 100%)`, color: "white", padding: "28px 20px 42px" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
-            style={{
-              background: "rgba(255,255,255,0.14)",
-              color: "white",
-              border: "1px solid rgba(255,255,255,0.18)",
-              borderRadius: 999,
-              padding: "6px 12px",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer"
-            }}
-          >
-            {t.languageSwitch}
-          </button>
-        </div>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, textAlign: "center", marginBottom: 8 }}>{t.welcomeTop}</div>
+      <div style={{ background: `linear-gradient(180deg, ${G2} 0%, ${G} 100%)`, color: "white", padding: "20px 20px 42px", position: "relative" }}>
+        <button
+          onClick={() => setLanguage(language === "tr" ? "en" : "tr")}
+          style={{ position: "absolute", top: 18, right: 20, background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.92)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+        >
+          {langButtonLabel}
+        </button>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, textAlign: "center", marginBottom: 8 }}>{topWelcome}</div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 34, marginBottom: 22 }}>
           <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: schoolLogo ? 18 : 0, boxSizing: "border-box" }}>
             {schoolLogo ? (
@@ -1176,9 +1099,9 @@ function HomeView({
             {[evtDate ? fmtDate(evtDate) : "", fmtEventWindow(startTime, endTime)].filter(Boolean).join(" · ")}
           </div>
         </div>
-        <div style={{ marginTop: 22, background: "rgba(255,255,255,0.20)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(6px)", borderRadius: 20, padding: "18px 16px" }}>
-          <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.92)", textAlign: "center" }}>
-            {t.loginTitle}
+        <div style={{ marginTop: 22, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.16)", backdropFilter: "blur(6px)", borderRadius: 22, padding: "20px 16px 16px" }}>
+          <div style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.88)", textAlign: "center", marginBottom: 14, lineHeight: 1.4 }}>
+            {entryPrompt}
           </div>
           <input
             value={landingCode}
@@ -1186,24 +1109,40 @@ function HomeView({
             onKeyDown={(event) => {
               if (event.key === "Enter") onOpenEntrance(landingCode);
             }}
-            placeholder={t.enterCode}
-            style={{ ...iBase, marginTop: 16, background: "rgba(255,255,255,0.98)", textAlign: "center", borderColor: "rgba(212,167,63,0.25)", color: "#4B5563" }}
+            placeholder="_  _  _  _  _  _"
+            maxLength={6}
+            style={{
+              ...iBase,
+              marginTop: 0,
+              height: 60,
+              padding: "0 18px",
+              background: "rgba(255,255,255,0.98)",
+              textAlign: "center",
+              borderColor: "rgba(212,167,63,0.22)",
+              borderRadius: 16,
+              color: "#334155",
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: "0.24em",
+              textTransform: "uppercase",
+              boxShadow: "inset 0 1px 2px rgba(15,23,42,0.04)"
+            }}
           />
-          <Btn amber full onClick={() => onOpenEntrance(landingCode)} style={{ padding: "14px 16px", fontSize: 15, marginTop: 10 }}>
-            {t.loginButton}
+          <Btn amber full onClick={() => onOpenEntrance(landingCode)} style={{ padding: "16px 16px", fontSize: 15, marginTop: 12, borderRadius: 16 }}>
+            {loginLabel}
           </Btn>
-          {landingError && <div style={{ marginTop: 10, fontSize: 12, color: "#FFD5D5" }}>{landingError}</div>}
+          {landingError && <div style={{ marginTop: 10, fontSize: 12, color: "#FFD5D5", textAlign: "center" }}>{landingError}</div>}
         </div>
       </div>
 
       <div style={{ background: CR, padding: "16px 16px 14px" }}>
         <Card>
-          <SLabel>{t.howToStart}</SLabel>
+          <SLabel>{howToStartLabel}</SLabel>
           <div style={{ background: cloudReady ? "#E8F0EC" : "#FFF0E3", borderRadius: 14, padding: "12px 14px", fontSize: 13, color: G, marginBottom: 14 }}>
             {landingHelpText || statusLabel}
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6, color: "#75695E" }}>
-            {landingNoteText || t.defaultNote}
+            {landingNoteText || "Parents can scan the printed QR code or enter the meeting code provided by the school."}
           </div>
 
         </Card>
@@ -1223,7 +1162,7 @@ function HomeView({
             display: "inline-block"
           }}
         >
-          {adminConfigured ? t.staffLogin : t.staffDashboard}
+          {adminConfigured ? "Staff login" : "Staff dashboard"}
         </button>
       </div>
     </div>
@@ -1231,9 +1170,6 @@ function HomeView({
 }
 
 function AdminDashboard({
-  language,
-  setLanguage,
-  t,
   school,
   schoolLogo,
   evtName,
@@ -1254,27 +1190,22 @@ function AdminDashboard({
   onOpenEventQr,
   onLock,
   children,
+  language,
+  setLanguage,
 }) {
   return (
-    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto" }}>
+    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", position: "relative" }}>
+      <LanguageToggle language={language} setLanguage={setLanguage} dark />
       <div style={{ background: G, padding: "22px 20px 18px", color: "white" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <button onClick={onBack} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            ← {t.parentScreen}
+            ← Parent screen
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              onClick={() => setLanguage((prev) => (prev === "en" ? "tr" : "en"))}
-              style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-            >
-              {t.languageSwitch}
-            </button>
-            <button onClick={onLock} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              {t.lockStaff}
-            </button>
-          </div>
+          <button onClick={onLock} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            Lock staff
+          </button>
         </div>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>{t.staffDashboardTitle}</div>
+        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           {schoolLogo ? (
             <img src={schoolLogo} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: CR, padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
@@ -1811,11 +1742,42 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
   );
 }
 
-function LoadingScreen({ label }) {
-  return <div style={{ minHeight: "100vh", background: CR, display: "flex", alignItems: "center", justifyContent: "center", color: G, fontFamily: "'DM Sans',sans-serif" }}>{label}...</div>;
+
+function LanguageToggle({ language, setLanguage, dark = true, style = {} }) {
+  return (
+    <button
+      onClick={() => setLanguage(language === "tr" ? "en" : "tr")}
+      style={{
+        position: "absolute",
+        top: 18,
+        right: 20,
+        background: dark ? "rgba(255,255,255,0.14)" : "rgba(58,86,115,0.08)",
+        color: dark ? "white" : G,
+        border: dark ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(58,86,115,0.18)",
+        borderRadius: 10,
+        padding: "6px 10px",
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        zIndex: 5,
+        ...style,
+      }}
+    >
+      {language === "tr" ? "EN" : "TR"}
+    </button>
+  );
 }
 
-function ErrorScreen({ message }) {
+function LoadingScreen({ label, language, setLanguage }) {
+  return (
+    <div style={{ minHeight: "100vh", background: CR, display: "flex", alignItems: "center", justifyContent: "center", color: G, fontFamily: "'DM Sans',sans-serif", position: "relative" }}>
+      <LanguageToggle language={language} setLanguage={setLanguage} dark={false} />
+      {label}...
+    </div>
+  );
+}
+
+function ErrorScreen({ message, language, setLanguage }) {
   return <div style={{ minHeight: "100vh", background: CR, padding: 24, color: G, fontFamily: "'DM Sans',sans-serif" }}><div style={{ maxWidth: 720, margin: "0 auto" }}><div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.6, marginBottom: 10 }}>App Error</div><h1 style={{ margin: "0 0 12px", fontSize: 28 }}>The app could not open this event</h1><p style={{ margin: 0, lineHeight: 1.5 }}>{message}</p></div></div>;
 }
 
