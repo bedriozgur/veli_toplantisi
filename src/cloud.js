@@ -39,6 +39,7 @@ export async function publishEvent(eventCode, payload) {
     {
       ...payload,
       eventCode,
+      eventStatus: payload.eventStatus || "published",
       updatedAt: new Date().toISOString(),
     },
     { merge: true }

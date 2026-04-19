@@ -1,16 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import teachersSeed from "./data/teachers.json";
-import classesSeed from "./data/classes.json";
-import studentsSeed from "./data/students.json";
 import {
-  normalizeTeachers,
-  normalizeClasses,
-  normalizeStudents,
   normalizeParentPayload,
   buildMeetingsState,
 } from "./utils/normalizeData";
-import { parseCsv } from "./utils/csv";
 import { isCloudConfigured, loadEvent, loadProgress, publishEvent, saveProgress } from "./cloud";
+import {
+  buildEventPayload,
+  buildTimeOptions,
+  createId,
+  DEFAULT_ADMIN_PIN,
+  DEFAULT_EVENT,
+  DEFAULT_EVENT_STATUS,
+  DEFAULT_LANDING_HELP,
+  DEFAULT_LANDING_NOTE,
+  DEFAULT_NOTES_EMAIL,
+  DEFAULT_SCHOOL,
+  DEFAULT_START_TIME,
+  DEFAULT_END_TIME,
+  isEventAccessible,
+  isEventExpired,
+  makeEventCode,
+  normalizeAdminState,
+  schoolInitials,
+} from "./config/eventConfig";
+import {
+  CLASS_TEMPLATE_CSV,
+  downloadTextFile,
+  importClassesFromCsv,
+  importStudentsFromCsv,
+  importTeachersFromCsv,
+  STUDENT_TEMPLATE_CSV,
+  TEACHER_TEMPLATE_CSV,
+} from "./utils/importData";
 
 const G = "#1B3A2D";
 const A = "#C4803A";
@@ -19,11 +40,6 @@ const STORAGE_KEY = "pe_admin_v2";
 const PARENT_KEY_PREFIX = "pe_parent_v2:";
 const ADMIN_PIN_KEY = "pe_admin_pin";
 const ADMIN_UNLOCK_KEY = "pe_admin_unlock";
-
-const DEFAULT_SCHOOL = "Oakwood Academy";
-const DEFAULT_EVENT = "Parents' Evening";
-const DEFAULT_NOTES_EMAIL = "parents-evening@school.org";
-const DEFAULT_ADMIN_PIN = "";
 
 const iBase = {
   width: "100%",
@@ -51,7 +67,6 @@ const dec = (value) => {
   const bytes = Uint8Array.from(atob(normalized), (char) => char.charCodeAt(0));
   return JSON.parse(decoder.decode(bytes));
 };
-const uid = () => Date.now() + Math.floor(Math.random() * 9999);
 const cloudReady = isCloudConfigured();
 
 const fmtDate = (value) =>
@@ -64,8 +79,11 @@ const fmtDate = (value) =>
       })
     : "";
 
-function makeEventCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+const TIME_OPTIONS = buildTimeOptions();
+
+function fmtEventWindow(startTime, endTime) {
+  if (startTime && endTime) return `${startTime} - ${endTime}`;
+  return startTime || endTime || "";
 }
 
 function safeSetStorage(key, value) {
@@ -117,38 +135,11 @@ function classTeacherCount(source, classId) {
   ).length;
 }
 
-function normalizeAdminState(raw) {
-  return {
-    school: raw?.school || DEFAULT_SCHOOL,
-    schoolLogo: raw?.schoolLogo || "",
-    evtName: raw?.evtName || DEFAULT_EVENT,
-    evtDate: raw?.evtDate || "",
-    notesEmail: raw?.notesEmail || DEFAULT_NOTES_EMAIL,
-    eventCode: raw?.eventCode || makeEventCode(),
-    teachers: normalizeTeachers(raw?.teachers ?? teachersSeed),
-    classes: normalizeClasses(raw?.classes ?? classesSeed),
-    students: normalizeStudents(raw?.students ?? studentsSeed),
-  };
-}
-
-function buildEventPayload({ school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students }) {
-  return { school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students };
-}
-
 function markEntranceSource(payload, sourceType) {
   return {
     ...payload,
     sourceType,
   };
-}
-
-function schoolInitials(name) {
-  return String(name || "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("");
 }
 
 function buildParentPayload(source, student) {
@@ -161,6 +152,8 @@ function buildParentPayload(source, student) {
     school: source.school || "",
     evtName: source.evtName || "",
     evtDate: source.evtDate || "",
+    startTime: source.startTime || "",
+    endTime: source.endTime || "",
     notesEmail: source.notesEmail || "",
     eventCode: source.eventCode || "",
     studentId: student.id,
@@ -176,18 +169,24 @@ export default function App() {
   const [mode, setMode] = useState(null);
   const [bootError, setBootError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [adminTab, setAdminTab] = useState("teachers");
+  const [adminTab, setAdminTab] = useState("settings");
 
   const [school, setSchool] = useState(DEFAULT_SCHOOL);
   const [schoolLogo, setSchoolLogo] = useState("");
   const [evtName, setEvtName] = useState(DEFAULT_EVENT);
   const [evtDate, setEvtDate] = useState("");
+  const [startTime, setStartTime] = useState(DEFAULT_START_TIME);
+  const [endTime, setEndTime] = useState(DEFAULT_END_TIME);
   const [notesEmail, setNotesEmail] = useState(DEFAULT_NOTES_EMAIL);
   const [eventCode, setEventCode] = useState(makeEventCode());
+  const [eventStatus, setEventStatus] = useState(DEFAULT_EVENT_STATUS);
+  const [expiresAt, setExpiresAt] = useState("");
+  const [landingHelpText, setLandingHelpText] = useState(DEFAULT_LANDING_HELP);
+  const [landingNoteText, setLandingNoteText] = useState(DEFAULT_LANDING_NOTE);
 
-  const [teachers, setTeachers] = useState(normalizeTeachers(teachersSeed));
-  const [classes, setClasses] = useState(normalizeClasses(classesSeed));
-  const [students, setStudents] = useState(normalizeStudents(studentsSeed));
+  const [teachers, setTeachers] = useState(normalizeAdminState().teachers);
+  const [classes, setClasses] = useState(normalizeAdminState().classes);
+  const [students, setStudents] = useState(normalizeAdminState().students);
 
   const [pData, setPData] = useState(null);
   const [entranceData, setEntranceData] = useState(null);
@@ -209,6 +208,13 @@ export default function App() {
     if (raw?.eventCode && raw?.studentId && cloudReady) {
       const remoteEvent = await loadEvent(raw.eventCode);
       if (!remoteEvent) throw new Error("Published event not found.");
+      if (!isEventAccessible(remoteEvent)) {
+        throw new Error(
+          isEventExpired(remoteEvent)
+            ? "This meeting link has expired."
+            : "This meeting is not available right now."
+        );
+      }
       const student = (remoteEvent.students || []).find((item) => item.id === raw.studentId);
       if (!student) throw new Error("Student not found in event.");
       const payload = buildParentPayload(remoteEvent, student);
@@ -232,6 +238,13 @@ export default function App() {
       if (!cloudReady) throw new Error("Firebase config is missing for this event link.");
       const remoteEvent = await loadEvent(code);
       if (!remoteEvent) throw new Error(`No event found for code ${code}.`);
+      if (!isEventAccessible(remoteEvent)) {
+        throw new Error(
+          isEventExpired(remoteEvent)
+            ? `Meeting code ${code} has expired.`
+            : `Meeting code ${code} is not available right now.`
+        );
+      }
       setEntranceData(markEntranceSource(remoteEvent, "cloud"));
       setMode("entrance");
       return;
@@ -272,8 +285,14 @@ export default function App() {
           setSchoolLogo(state.schoolLogo);
           setEvtName(state.evtName);
           setEvtDate(state.evtDate);
+          setStartTime(state.startTime);
+          setEndTime(state.endTime);
           setNotesEmail(state.notesEmail);
           setEventCode(state.eventCode);
+          setEventStatus(state.eventStatus);
+          setExpiresAt(state.expiresAt);
+          setLandingHelpText(state.landingHelpText);
+          setLandingNoteText(state.landingNoteText);
           setTeachers(state.teachers);
           setClasses(state.classes);
           setStudents(state.students);
@@ -324,9 +343,40 @@ export default function App() {
     if (mode !== "admin") return;
     safeSetStorage(
       STORAGE_KEY,
-      JSON.stringify({ school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students })
+      JSON.stringify({
+        school,
+        schoolLogo,
+        evtName,
+        evtDate,
+        startTime,
+        endTime,
+        notesEmail,
+        eventCode,
+        landingHelpText,
+        landingNoteText,
+        teachers,
+        classes,
+        students,
+      })
     );
-  }, [mode, school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students]);
+  }, [
+    mode,
+    school,
+    schoolLogo,
+    evtName,
+    evtDate,
+    startTime,
+    endTime,
+    notesEmail,
+    eventCode,
+    eventStatus,
+    expiresAt,
+    landingHelpText,
+    landingNoteText,
+    teachers,
+    classes,
+    students,
+  ]);
 
   useEffect(() => {
     if (adminPin) {
@@ -346,7 +396,23 @@ export default function App() {
     }
   }, [mode, pData, meetings]);
 
-  const currentEvent = buildEventPayload({ school, schoolLogo, evtName, evtDate, notesEmail, eventCode, teachers, classes, students });
+  const currentEvent = buildEventPayload({
+    school,
+    schoolLogo,
+    evtName,
+    evtDate,
+    startTime,
+    endTime,
+    notesEmail,
+    eventCode,
+    eventStatus,
+    expiresAt,
+    landingHelpText,
+    landingNoteText,
+    teachers,
+    classes,
+    students,
+  });
   const eventUrl =
     cloudReady && eventCode
       ? `${window.location.href.split("#")[0]}#eventCode=${encodeURIComponent(eventCode)}`
@@ -382,10 +448,16 @@ export default function App() {
     try {
       if (!cloudReady) throw new Error("Firebase config is missing.");
       if (!eventCode.trim()) throw new Error("Event code is required.");
-      setPublishState("Publishing...");
+      setPublishState("Saving event...");
       await publishEvent(eventCode.trim().toUpperCase(), currentEvent);
       setEventCode(eventCode.trim().toUpperCase());
-      setPublishState("Published to Firebase");
+      setPublishState(
+        eventStatus === "closed"
+          ? "Event saved as closed"
+          : eventStatus === "draft"
+            ? "Event saved as draft"
+            : "Published to Firebase"
+      );
     } catch (error) {
       setPublishState(String(error?.message || error));
     }
@@ -404,7 +476,7 @@ export default function App() {
       if (cloudReady && eventCode) {
         try {
           const remoteEvent = await loadEvent(eventCode);
-          if (remoteEvent) {
+          if (remoteEvent && isEventAccessible(remoteEvent)) {
             window.location.hash = `eventCode=${encodeURIComponent(eventCode)}`;
             setEntranceData(markEntranceSource(remoteEvent, "cloud"));
             setMode("entrance");
@@ -436,6 +508,14 @@ export default function App() {
       const remoteEvent = await loadEvent(code);
       if (!remoteEvent) {
         setLandingError(`No event was found for code ${code}.`);
+        return;
+      }
+      if (!isEventAccessible(remoteEvent)) {
+        setLandingError(
+          isEventExpired(remoteEvent)
+            ? `Meeting code ${code} has expired.`
+            : `Meeting code ${code} is not available right now.`
+        );
         return;
       }
       setLandingError("");
@@ -496,11 +576,18 @@ export default function App() {
     setSchoolLogo("");
     setEvtName(DEFAULT_EVENT);
     setEvtDate("");
+    setStartTime(DEFAULT_START_TIME);
+    setEndTime(DEFAULT_END_TIME);
     setNotesEmail(DEFAULT_NOTES_EMAIL);
     setEventCode(makeEventCode());
-    setTeachers(normalizeTeachers(teachersSeed));
-    setClasses(normalizeClasses(classesSeed));
-    setStudents(normalizeStudents(studentsSeed));
+    setEventStatus(DEFAULT_EVENT_STATUS);
+    setExpiresAt("");
+    setLandingHelpText(DEFAULT_LANDING_HELP);
+    setLandingNoteText(DEFAULT_LANDING_NOTE);
+    const defaults = normalizeAdminState();
+    setTeachers(defaults.teachers);
+    setClasses(defaults.classes);
+    setStudents(defaults.students);
     setPublishState("");
     try {
       localStorage.clear();
@@ -523,8 +610,14 @@ export default function App() {
     setSchoolLogo(state.schoolLogo);
     setEvtName(state.evtName);
     setEvtDate(state.evtDate);
+    setStartTime(state.startTime);
+    setEndTime(state.endTime);
     setNotesEmail(state.notesEmail);
     setEventCode(state.eventCode);
+    setEventStatus(state.eventStatus);
+    setExpiresAt(state.expiresAt);
+    setLandingHelpText(state.landingHelpText);
+    setLandingNoteText(state.landingNoteText);
     setTeachers(state.teachers);
     setClasses(state.classes);
     setStudents(state.students);
@@ -533,9 +626,11 @@ export default function App() {
   const sendEmail = () => {
     if (!pData) return;
     const dateStr = pData.evtDate ? fmtDate(pData.evtDate) : "";
+    const timeStr = fmtEventWindow(pData.startTime, pData.endTime);
     const hdr =
       `${pData.evtName} — ${pData.school}` +
       `${dateStr ? `\n${dateStr}` : ""}` +
+      `${timeStr ? `\n${timeStr}` : ""}` +
       `${pData.child ? `\nStudent: ${pData.child}` : ""}` +
       `${pData.className ? `\nClass: ${pData.className}` : ""}` +
       `\n${"─".repeat(38)}\n\n`;
@@ -575,7 +670,13 @@ export default function App() {
           <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>{pData.school}</div>
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 30, fontWeight: 800, lineHeight: 1.08, marginBottom: 4 }}>{pData.evtName}</div>
           {pData.child && <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.88, marginBottom: 2 }}>{pData.child}{pData.parent ? ` · ${pData.parent}` : ""}</div>}
-          {pData.evtDate && <div style={{ fontSize: 12, opacity: 0.5 }}>{fmtDate(pData.evtDate)}</div>}
+          {(pData.evtDate || pData.startTime || pData.endTime) && (
+            <div style={{ fontSize: 12, opacity: 0.5 }}>
+              {[pData.evtDate ? fmtDate(pData.evtDate) : "", fmtEventWindow(pData.startTime, pData.endTime)]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          )}
           <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "14px 16px", marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
               <div style={{ fontSize: 13, opacity: 0.85 }}>
@@ -691,6 +792,14 @@ export default function App() {
           landingCode={landingCode}
           setLandingCode={setLandingCode}
           landingError={landingError}
+          school={school}
+          schoolLogo={schoolLogo}
+          evtName={evtName}
+          evtDate={evtDate}
+          startTime={startTime}
+          endTime={endTime}
+          landingHelpText={landingHelpText}
+          landingNoteText={landingNoteText}
         />
         {showEventQr && (
           <QrModal
@@ -728,6 +837,8 @@ export default function App() {
       schoolLogo={schoolLogo}
       evtName={evtName}
       evtDate={evtDate}
+      startTime={startTime}
+      endTime={endTime}
       notesEmail={notesEmail}
       eventCode={eventCode}
       publishState={publishState}
@@ -745,6 +856,16 @@ export default function App() {
       <div style={{ padding: "18px 16px 120px" }}>
         {adminTab === "teachers" && (
           <TeachersTab
+            teachers={teachers}
+            setTeachers={setTeachers}
+            onRemove={(id) => {
+              setTeachers((p) => p.filter((t) => t.id !== id));
+              setClasses((p) => p.map((c) => ({ ...c, tids: Array.isArray(c.tids) ? c.tids.filter((x) => x !== id) : [] })));
+            }}
+          />
+        )}
+        {adminTab === "settings" && (
+          <SettingsTab
             school={school}
             setSchool={setSchool}
             schoolLogo={schoolLogo}
@@ -753,16 +874,22 @@ export default function App() {
             setEvtName={setEvtName}
             evtDate={evtDate}
             setEvtDate={setEvtDate}
+            startTime={startTime}
+            setStartTime={setStartTime}
+            endTime={endTime}
+            setEndTime={setEndTime}
             notesEmail={notesEmail}
             setNotesEmail={setNotesEmail}
             eventCode={eventCode}
             setEventCode={setEventCode}
-            teachers={teachers}
-            setTeachers={setTeachers}
-            onRemove={(id) => {
-              setTeachers((p) => p.filter((t) => t.id !== id));
-              setClasses((p) => p.map((c) => ({ ...c, tids: Array.isArray(c.tids) ? c.tids.filter((x) => x !== id) : [] })));
-            }}
+            eventStatus={eventStatus}
+            setEventStatus={setEventStatus}
+            expiresAt={expiresAt}
+            setExpiresAt={setExpiresAt}
+            landingHelpText={landingHelpText}
+            setLandingHelpText={setLandingHelpText}
+            landingNoteText={landingNoteText}
+            setLandingNoteText={setLandingNoteText}
             onResetDemo={resetDemoData}
             onPublish={publishCurrentEvent}
             publishState={publishState}
@@ -846,7 +973,11 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Entrance List</div>
         <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{data.evtName}</div>
         <div style={{ fontSize: 16, fontWeight: 600, opacity: 0.86 }}>{data.school}</div>
-        <div style={{ fontSize: 13, opacity: 0.62, marginTop: 4 }}>{fmtDate(data.evtDate)}</div>
+        <div style={{ fontSize: 13, opacity: 0.62, marginTop: 4 }}>
+          {[data.evtDate ? fmtDate(data.evtDate) : "", fmtEventWindow(data.startTime, data.endTime)]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
         <div style={{ marginTop: 18, background: "rgba(255,255,255,0.12)", borderRadius: 16, padding: "14px 16px" }}>
           Type at least 2 letters from the student name to reveal matches.
         </div>
@@ -907,33 +1038,49 @@ function HomeView({
   landingCode,
   setLandingCode,
   landingError,
+  school,
+  schoolLogo,
+  evtName,
+  evtDate,
+  startTime,
+  endTime,
+  landingHelpText,
+  landingNoteText,
 }) {
   const statusLabel = cloudReady
     ? publishState || "Enter the meeting code from the school to open the student list."
     : "Cloud event lookup is unavailable on this build.";
+  const showNeutralBrand = !schoolLogo && (!school || school === DEFAULT_SCHOOL) && (!evtName || evtName === DEFAULT_EVENT);
+  const landingSchool = showNeutralBrand ? "School Meeting Portal" : school;
+  const landingEvent = showNeutralBrand ? "Parent and teacher meeting access" : evtName;
 
   return (
     <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
-      <div style={{ background: `linear-gradient(180deg, ${G} 0%, #264636 100%)`, color: "white", padding: "28px 20px 30px" }}>
+      <div style={{ background: `linear-gradient(180deg, ${G} 0%, #264636 100%)`, color: "white", padding: "28px 20px 42px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
           <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55 }}>Welcome</div>
           <button onClick={onOpenAdmin} style={{ background: "transparent", color: "rgba(255,255,255,0.76)", border: "none", padding: 0, fontSize: 13, textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>
             {adminConfigured ? "Staff login" : "Staff dashboard"}
           </button>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)" }}>
-            <div style={{ width: 46, height: 46, borderRadius: 14, background: CR, color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800 }}>
-              SM
-            </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 34, marginBottom: 22 }}>
+          <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: schoolLogo ? 18 : 0, boxSizing: "border-box" }}>
+            {schoolLogo ? (
+              <img src={schoolLogo} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            ) : (
+              <div style={{ width: 94, height: 94, borderRadius: 28, background: CR, color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 34, fontWeight: 800 }}>
+                {schoolInitials(landingSchool) || "SM"}
+              </div>
+            )}
           </div>
-          <div>
-            <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 34, fontWeight: 800, lineHeight: 1.02, marginBottom: 6 }}>School Meeting Portal</div>
-            <div style={{ fontSize: 18, opacity: 0.92 }}>Parent and teacher meeting access</div>
+          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{landingSchool}</div>
+          <div style={{ fontSize: 18, opacity: 0.92 }}>{landingEvent}</div>
+          <div style={{ fontSize: 13, opacity: 0.68, marginTop: 8 }}>
+            {[evtDate ? fmtDate(evtDate) : "", fmtEventWindow(startTime, endTime)].filter(Boolean).join(" · ")}
           </div>
         </div>
         <div style={{ marginTop: 22, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "18px 16px" }}>
-          <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92 }}>
+          <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92, textAlign: "center" }}>
             Welcome to the school. Enter the meeting code to find your child, view the teacher list, and see each meeting location.
           </div>
           <input
@@ -946,7 +1093,7 @@ function HomeView({
             style={{ ...iBase, marginTop: 16, background: "rgba(255,255,255,0.96)" }}
           />
           <Btn amber full onClick={() => onOpenEntrance(landingCode)} style={{ padding: "14px 16px", fontSize: 15, marginTop: 10 }}>
-            Open student search
+            Login to meeting portal
           </Btn>
           {landingError && <div style={{ marginTop: 10, fontSize: 12, color: "#FFD5D5" }}>{landingError}</div>}
         </div>
@@ -956,10 +1103,10 @@ function HomeView({
         <Card>
           <SLabel>How To Start</SLabel>
           <div style={{ background: cloudReady ? "#E8F0EC" : "#FFF0E3", borderRadius: 14, padding: "12px 14px", fontSize: 13, color: G, marginBottom: 14 }}>
-            {statusLabel}
+            {landingHelpText || statusLabel}
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6, color: "#75695E" }}>
-            Parents should scan the printed QR code or enter the meeting code provided by the school. Staff can sign in from the link above.
+            {landingNoteText || "Parents should scan the printed QR code or enter the meeting code provided by the school. Staff can sign in from the link above."}
           </div>
         </Card>
       </div>
@@ -972,6 +1119,8 @@ function AdminDashboard({
   schoolLogo,
   evtName,
   evtDate,
+  startTime,
+  endTime,
   notesEmail,
   eventCode,
   publishState,
@@ -1011,7 +1160,9 @@ function AdminDashboard({
         </div>
         <div style={{ fontSize: 15, opacity: 0.88 }}>{evtName}</div>
         <div style={{ fontSize: 12, opacity: 0.58, marginTop: 4 }}>
-          {[evtDate ? fmtDate(evtDate) : "", notesEmail || "", eventCode ? `Code ${eventCode}` : ""].filter(Boolean).join(" · ")}
+          {[evtDate ? fmtDate(evtDate) : "", fmtEventWindow(startTime, endTime), notesEmail || "", eventCode ? `Code ${eventCode}` : ""]
+            .filter(Boolean)
+            .join(" · ")}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 18, marginBottom: 14 }}>
           {[
@@ -1042,7 +1193,7 @@ function AdminDashboard({
       </div>
 
       <div style={{ display: "flex", background: "#EEE7DD", padding: 6, gap: 6, margin: "14px 16px 0", borderRadius: 16 }}>
-        {[["teachers", "Teachers"], ["classes", "Classes"], ["students", "Students & QR"]].map(([tab, label]) => (
+        {[["settings", "Settings"], ["teachers", "Teachers"], ["classes", "Classes"], ["students", "Students & QR"]].map(([tab, label]) => (
           <button
             key={tab}
             onClick={() => setAdminTab(tab)}
@@ -1068,7 +1219,7 @@ function AdminDashboard({
   );
 }
 
-function TeachersTab({
+function SettingsTab({
   school,
   setSchool,
   schoolLogo,
@@ -1077,13 +1228,22 @@ function TeachersTab({
   setEvtName,
   evtDate,
   setEvtDate,
+  startTime,
+  setStartTime,
+  endTime,
+  setEndTime,
   notesEmail,
   setNotesEmail,
   eventCode,
   setEventCode,
-  teachers,
-  setTeachers,
-  onRemove,
+  eventStatus,
+  setEventStatus,
+  expiresAt,
+  setExpiresAt,
+  landingHelpText,
+  setLandingHelpText,
+  landingNoteText,
+  setLandingNoteText,
   onResetDemo,
   onPublish,
   publishState,
@@ -1092,55 +1252,14 @@ function TeachersTab({
   adminPin,
   setAdminPin,
 }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", subject: "", room: "", floor: "", time: "", status: "active", note: "" });
-  const [editId, setEditId] = useState(null);
-  const [editFm, setEditFm] = useState({});
   const fileInputRef = useRef(null);
-  const csvInputRef = useRef(null);
   const logoInputRef = useRef(null);
-
-  const addT = () => {
-    if (!form.name) return;
-    setTeachers((p) => [...p, { ...form, id: uid() }]);
-    setForm({ name: "", subject: "", room: "", floor: "", time: "", status: "active", note: "" });
-    setShowAdd(false);
-  };
-
-  const saveEdit = () => {
-    setTeachers((p) => p.map((t) => (t.id === editId ? { ...t, ...editFm } : t)));
-    setEditId(null);
-  };
 
   const importFile = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const text = await file.text();
     onImportSetup(JSON.parse(text));
-    event.target.value = "";
-  };
-
-  const importTeacherCsv = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    const rows = parseCsv(text);
-    const nextTeachers = rows
-      .map((row) => ({
-        id: uid(),
-        name: row.name || row.teacher || row.teacher_name || "",
-        subject: row.subject || row.department || "",
-        room: row.location || row.meeting_location || row.room || "",
-        floor: row.floor || "",
-        time: row.time || "",
-        status: String(row.status || "active").toLowerCase() === "unavailable" ? "unavailable" : "active",
-        note: row.note || "",
-      }))
-      .filter((teacher) => teacher.name);
-
-    if (nextTeachers.length) {
-      setTeachers((previous) => [...previous, ...nextTeachers]);
-    }
     event.target.value = "";
   };
 
@@ -1178,17 +1297,51 @@ function TeachersTab({
           <input value={evtName} onChange={(e) => setEvtName(e.target.value)} placeholder="Event name" style={iBase} />
           <input type="date" value={evtDate} onChange={(e) => setEvtDate(e.target.value)} style={iBase} />
         </div>
-        <input value={notesEmail} onChange={(e) => setNotesEmail(e.target.value)} placeholder="Notes recipient email" style={{ ...iBase, marginBottom: 8 }} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          <select value={startTime} onChange={(e) => setStartTime(e.target.value)} style={iBase}>
+            {TIME_OPTIONS.map((time) => (
+              <option key={`start-${time}`} value={time}>{time}</option>
+            ))}
+          </select>
+          <select value={endTime} onChange={(e) => setEndTime(e.target.value)} style={iBase}>
+            {TIME_OPTIONS.map((time) => (
+              <option key={`end-${time}`} value={time}>{time}</option>
+            ))}
+          </select>
+        </div>
+        <input value={notesEmail} onChange={(e) => setNotesEmail(e.target.value)} placeholder="Default notes email" style={{ ...iBase, marginBottom: 8 }} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, marginBottom: 8 }}>
           <input value={eventCode} onChange={(e) => setEventCode(e.target.value.toUpperCase())} placeholder="Event code" style={iBase} />
           <Btn light onClick={() => setEventCode(makeEventCode())}>New code</Btn>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          <select value={eventStatus} onChange={(e) => setEventStatus(e.target.value)} style={iBase}>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="closed">Closed</option>
+          </select>
+          <input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} style={iBase} />
+        </div>
+        <textarea
+          value={landingHelpText}
+          onChange={(e) => setLandingHelpText(e.target.value)}
+          rows={3}
+          placeholder="Landing page highlight text"
+          style={{ ...iBase, marginBottom: 8, resize: "vertical", minHeight: 86 }}
+        />
+        <textarea
+          value={landingNoteText}
+          onChange={(e) => setLandingNoteText(e.target.value)}
+          rows={3}
+          placeholder="Landing page helper text below the box"
+          style={{ ...iBase, marginBottom: 12, resize: "vertical", minHeight: 86 }}
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           <Btn full light onClick={onDownloadSetup}>Download setup</Btn>
           <Btn full light onClick={() => fileInputRef.current?.click()}>Import setup</Btn>
         </div>
         <input ref={fileInputRef} type="file" accept="application/json" onChange={importFile} style={{ display: "none" }} />
-        <Btn amber full onClick={onPublish}>{cloudReady ? "Publish to Firebase" : "Firebase config missing"}</Btn>
+        <Btn amber full onClick={onPublish}>{cloudReady ? "Save event to Firebase" : "Firebase config missing"}</Btn>
         <div style={{ fontSize: 12, color: publishState.includes("Published") ? "#2E7D4F" : "#7A6D61", marginTop: 8 }}>
           {publishState || (cloudReady ? "Publish before using the shared entrance QR." : "Firebase env vars are missing.")}
         </div>
@@ -1206,12 +1359,58 @@ function TeachersTab({
           This is a simple screen lock for staff tools. For stronger protection, real authentication would still be needed later.
         </div>
       </Card>
+      <Card>
+        <SLabel>Reset</SLabel>
+        <div style={{ fontSize: 14, color: "#75695E", lineHeight: 1.6, marginBottom: 12 }}>
+          Reset restores the demo data, clears the uploaded logo, and creates a new event code.
+        </div>
+        <Btn light onClick={onResetDemo}>Reset demo data</Btn>
+      </Card>
+    </div>
+  );
+}
 
+function TeachersTab({ teachers, setTeachers, onRemove }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", subject: "", room: "", floor: "", time: "", status: "active", note: "" });
+  const [editId, setEditId] = useState(null);
+  const [editFm, setEditFm] = useState({});
+  const csvInputRef = useRef(null);
+
+  const addT = () => {
+    if (!form.name) return;
+    setTeachers((p) => [...p, { ...form, id: createId() }]);
+    setForm({ name: "", subject: "", room: "", floor: "", time: "", status: "active", note: "" });
+    setShowAdd(false);
+  };
+
+  const saveEdit = () => {
+    setTeachers((p) => p.map((t) => (t.id === editId ? { ...t, ...editFm } : t)));
+    setEditId(null);
+  };
+
+  const importTeacherCsv = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const nextTeachers = importTeachersFromCsv(text);
+    if (nextTeachers.length) {
+      setTeachers((previous) => [...previous, ...nextTeachers]);
+    }
+    event.target.value = "";
+  };
+
+  const downloadTeacherTemplate = () => {
+    downloadTextFile("teachers-template.csv", TEACHER_TEMPLATE_CSV, "text/csv;charset=utf-8;");
+  };
+
+  return (
+    <div>
       <Row>
         <SHead>Teachers <N n={teachers.length} /></SHead>
         <div style={{ display: "flex", gap: 8 }}>
+          <Btn onClick={downloadTeacherTemplate} light>Example CSV</Btn>
           <Btn onClick={() => csvInputRef.current?.click()} light>Import CSV</Btn>
-          <Btn onClick={onResetDemo} light>Reset Demo</Btn>
           <Btn onClick={() => setShowAdd((p) => !p)} amber={!showAdd}>{showAdd ? "Cancel" : "+ Add"}</Btn>
         </div>
       </Row>
@@ -1245,7 +1444,7 @@ function TeachersTab({
             <>
               <input value={editFm.name || ""} onChange={(e) => setEditFm((p) => ({ ...p, name: e.target.value }))} style={{ ...iBase, marginBottom: 8 }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-              <input value={editFm.subject || ""} onChange={(e) => setEditFm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject" style={iBase} />
+                <input value={editFm.subject || ""} onChange={(e) => setEditFm((p) => ({ ...p, subject: e.target.value }))} placeholder="Subject" style={iBase} />
                 <input value={editFm.room || ""} onChange={(e) => setEditFm((p) => ({ ...p, room: e.target.value }))} placeholder="Meeting location" style={iBase} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
@@ -1286,12 +1485,28 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [openId, setOpenId] = useState(null);
+  const csvInputRef = useRef(null);
 
   const addC = () => {
     if (!newName.trim()) return;
-    setClasses((p) => [...p, { id: uid(), name: newName.trim(), tids: [] }]);
+    setClasses((p) => [...p, { id: createId(), name: newName.trim(), tids: [] }]);
     setNewName("");
     setShowAdd(false);
+  };
+
+  const importClassCsv = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const nextClasses = importClassesFromCsv(text, teachers);
+    if (nextClasses.length) {
+      setClasses((previous) => [...previous, ...nextClasses]);
+    }
+    event.target.value = "";
+  };
+
+  const downloadClassTemplate = () => {
+    downloadTextFile("classes-template.csv", CLASS_TEMPLATE_CSV, "text/csv;charset=utf-8;");
   };
 
   const toggleT = (cid, tid) =>
@@ -1305,7 +1520,15 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
 
   return (
     <div>
-      <Row><SHead>Classes <N n={classes.length} /></SHead><Btn onClick={() => setShowAdd((p) => !p)} amber={!showAdd}>{showAdd ? "Cancel" : "+ Add"}</Btn></Row>
+      <Row>
+        <SHead>Classes <N n={classes.length} /></SHead>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn onClick={downloadClassTemplate} light>Example CSV</Btn>
+          <Btn onClick={() => csvInputRef.current?.click()} light>Import CSV</Btn>
+          <Btn onClick={() => setShowAdd((p) => !p)} amber={!showAdd}>{showAdd ? "Cancel" : "+ Add"}</Btn>
+        </div>
+      </Row>
+      <input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={importClassCsv} style={{ display: "none" }} />
       {showAdd && <Card border><input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Class name" style={{ ...iBase, marginBottom: 10 }} /><Btn onClick={addC} amber full>Add Class</Btn></Card>}
       {classes.map((cls) => {
         const isOpen = openId === cls.id;
@@ -1353,14 +1576,14 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
 
   const addOne = () => {
     if (!form.child) return;
-    setStudents((p) => [...p, { ...form, cid: form.cid ? Number(form.cid) : null, id: uid() }]);
+    setStudents((p) => [...p, { ...form, cid: form.cid ? Number(form.cid) : null, id: createId() }]);
     setForm((p) => ({ child: "", parent: "", cid: p.cid }));
     setShowAdd(false);
   };
 
   const addBulk = () => {
     const names = bulkText.split("\n").map((n) => n.trim()).filter(Boolean);
-    setStudents((p) => [...p, ...names.map((child) => ({ id: uid(), child, parent: "", cid: bulkCid ? Number(bulkCid) : null }))]);
+    setStudents((p) => [...p, ...names.map((child) => ({ id: createId(), child, parent: "", cid: bulkCid ? Number(bulkCid) : null }))]);
     setBulkText("");
     setBulk(false);
   };
@@ -1371,24 +1594,15 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
     const file = event.target.files?.[0];
     if (!file) return;
     const text = await file.text();
-    const rows = parseCsv(text);
-    const classLookup = new Map(classes.map((item) => [String(item.name).trim().toLowerCase(), item.id]));
-    const nextStudents = rows
-      .map((row) => {
-        const className = (row.class || row.class_name || row.classroom || "").trim().toLowerCase();
-        return {
-          id: uid(),
-          child: row.child || row.student || row.student_name || "",
-          parent: row.parent || row.parent_name || "",
-          cid: classLookup.has(className) ? classLookup.get(className) : null,
-        };
-      })
-      .filter((student) => student.child);
-
+    const nextStudents = importStudentsFromCsv(text, classes);
     if (nextStudents.length) {
       setStudents((previous) => [...previous, ...nextStudents]);
     }
     event.target.value = "";
+  };
+
+  const downloadStudentTemplate = () => {
+    downloadTextFile("students-template.csv", STUDENT_TEMPLATE_CSV, "text/csv;charset=utf-8;");
   };
 
   return (
@@ -1407,6 +1621,7 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
       <Row>
         <SHead>Students <N n={students.length} /></SHead>
         <div style={{ display: "flex", gap: 6 }}>
+          <Btn onClick={downloadStudentTemplate} light>Example CSV</Btn>
           <Btn onClick={() => csvInputRef.current?.click()} light>Import CSV</Btn>
           <Btn onClick={() => { setBulk((p) => !p); setShowAdd(false); }} light>{bulk ? "Cancel" : "Bulk ↓"}</Btn>
           <Btn onClick={() => { setShowAdd((p) => !p); setBulk(false); }} amber={!showAdd}>{showAdd ? "Cancel" : "+ Add"}</Btn>
