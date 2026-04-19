@@ -683,19 +683,10 @@ export default function App() {
     return (
       <>
         <HomeView
-          school={school}
-          schoolLogo={schoolLogo}
-          evtName={evtName}
-          evtDate={evtDate}
-          eventCode={eventCode}
           cloudReady={cloudReady}
           publishState={publishState}
-          teacherCount={teachers.length}
-          classCount={classes.length}
-          studentCount={students.length}
           onOpenEntrance={openEntranceByCode}
           onOpenAdmin={openAdminView}
-          onOpenEventQr={() => setShowEventQr(true)}
           adminConfigured={Boolean(adminPin)}
           landingCode={landingCode}
           setLandingCode={setLandingCode}
@@ -908,15 +899,8 @@ function EntranceView({ data, copyText, copied, openParentView, onBack }) {
 }
 
 function HomeView({
-  school,
-  schoolLogo,
-  evtName,
-  evtDate,
   cloudReady,
   publishState,
-  teacherCount,
-  classCount,
-  studentCount,
   onOpenEntrance,
   onOpenAdmin,
   adminConfigured,
@@ -927,7 +911,6 @@ function HomeView({
   const statusLabel = cloudReady
     ? publishState || "Enter the meeting code from the school to open the student list."
     : "Cloud event lookup is unavailable on this build.";
-  const eventLabel = evtName && evtName !== DEFAULT_EVENT ? evtName : "School Parent Meetings";
 
   return (
     <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
@@ -940,20 +923,15 @@ function HomeView({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
           <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)" }}>
-            {schoolLogo ? (
-              <img src={schoolLogo} alt={`${school} logo`} style={{ width: 46, height: 46, borderRadius: 14, objectFit: "contain", background: CR, padding: 6, boxSizing: "border-box" }} />
-            ) : (
             <div style={{ width: 46, height: 46, borderRadius: 14, background: CR, color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800 }}>
-                {schoolInitials(school) || "SM"}
-              </div>
-            )}
+              SM
+            </div>
           </div>
           <div>
-            <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 34, fontWeight: 800, lineHeight: 1.02, marginBottom: 6 }}>{school}</div>
-            <div style={{ fontSize: 18, opacity: 0.92 }}>{eventLabel}</div>
+            <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 34, fontWeight: 800, lineHeight: 1.02, marginBottom: 6 }}>School Meeting Portal</div>
+            <div style={{ fontSize: 18, opacity: 0.92 }}>Parent and teacher meeting access</div>
           </div>
         </div>
-        {evtDate && <div style={{ fontSize: 13, opacity: 0.66 }}>{fmtDate(evtDate)}</div>}
         <div style={{ marginTop: 22, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "18px 16px" }}>
           <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92 }}>
             Welcome to the school. Enter the meeting code to find your child, view the teacher list, and see each meeting location.
@@ -976,21 +954,12 @@ function HomeView({
 
       <div style={{ padding: 16 }}>
         <Card>
-          <SLabel>Event Status</SLabel>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-            {[
-              { label: "Teachers", value: teacherCount },
-              { label: "Classes", value: classCount },
-              { label: "Students", value: studentCount },
-            ].map((item) => (
-              <div key={item.label} style={{ background: "#F8F4EE", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 24, fontWeight: 800, color: G }}>{item.value}</div>
-                <div style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#8B8075", marginTop: 4 }}>{item.label}</div>
-              </div>
-            ))}
-          </div>
+          <SLabel>How To Start</SLabel>
           <div style={{ background: cloudReady ? "#E8F0EC" : "#FFF0E3", borderRadius: 14, padding: "12px 14px", fontSize: 13, color: G, marginBottom: 14 }}>
             {statusLabel}
+          </div>
+          <div style={{ fontSize: 14, lineHeight: 1.6, color: "#75695E" }}>
+            Parents should scan the printed QR code or enter the meeting code provided by the school. Staff can sign in from the link above.
           </div>
         </Card>
       </div>
