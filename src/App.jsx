@@ -1058,7 +1058,7 @@ function HomeView({
     <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
       <div style={{ background: `linear-gradient(180deg, ${G} 0%, #264636 100%)`, color: "white", padding: "28px 20px 42px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
-          <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55 }}>Welcome</div>
+          <div style={{ fontSize: 10, letterSpacing: 4, textTransform: opacity: 0.55 }}>Welcome to the School Meeting Portal</div>
           <button onClick={onOpenAdmin} style={{ background: "transparent", color: "rgba(255,255,255,0.76)", border: "none", padding: 0, fontSize: 13, textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>
             {adminConfigured ? "Staff login" : "Staff dashboard"}
           </button>
