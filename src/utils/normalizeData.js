@@ -47,7 +47,7 @@ export function buildMeetingsState(teachers) {
   const m = {};
   safeTeachers.forEach((t) => {
     if (t && t.id !== undefined) {
-      m[t.id] = { done: false, notes: "" };
+      m[t.id] = { done: false, followUp: false, notes: "" };
     }
   });
   return m;

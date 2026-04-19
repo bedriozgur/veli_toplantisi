@@ -95,6 +95,7 @@ function loadParentMeetings(keyId, teachers) {
     Object.keys(base).forEach((id) => {
       base[id] = {
         done: Boolean(saved?.[id]?.done),
+        followUp: Boolean(saved?.[id]?.followUp),
         notes: saved?.[id]?.notes || "",
       };
     });
@@ -131,6 +132,13 @@ function normalizeAdminState(raw) {
 
 function buildEventPayload({ school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students }) {
   return { school, evtName, evtDate, notesEmail, eventCode, teachers, classes, students };
+}
+
+function markEntranceSource(payload, sourceType) {
+  return {
+    ...payload,
+    sourceType,
+  };
 }
 
 function buildParentPayload(source, student) {
@@ -183,6 +191,8 @@ export default function App() {
   const [showAdminGate, setShowAdminGate] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [pinError, setPinError] = useState("");
+  const [landingCode, setLandingCode] = useState("");
+  const [landingError, setLandingError] = useState("");
 
   const openParentState = async (raw) => {
     if (raw?.eventCode && raw?.studentId && cloudReady) {
@@ -211,14 +221,14 @@ export default function App() {
       if (!cloudReady) throw new Error("Firebase config is missing for this event link.");
       const remoteEvent = await loadEvent(code);
       if (!remoteEvent) throw new Error(`No event found for code ${code}.`);
-      setEntranceData(remoteEvent);
+      setEntranceData(markEntranceSource(remoteEvent, "cloud"));
       setMode("entrance");
       return;
     }
 
     if (hash.startsWith("#event=")) {
       const raw = dec(hash.slice(7));
-      setEntranceData(normalizeAdminState(raw));
+      setEntranceData(markEntranceSource(normalizeAdminState(raw), "local"));
       setMode("entrance");
     }
   };
@@ -370,38 +380,60 @@ export default function App() {
   };
 
   const openParentView = (student, source) => {
-    const target = source.eventCode ? { eventCode: source.eventCode, studentId: student.id } : buildParentPayload(source, student);
+    const target =
+      source?.sourceType === "cloud" && source.eventCode
+        ? { eventCode: source.eventCode, studentId: student.id }
+        : buildParentPayload(source, student);
     window.location.hash = `p=${enc(target)}`;
   };
 
   const openEntranceView = () => {
     const open = async () => {
-      const savedSetup = safeGetStorage(STORAGE_KEY);
-
       if (cloudReady && eventCode) {
         try {
           const remoteEvent = await loadEvent(eventCode);
           if (remoteEvent) {
             window.location.hash = `eventCode=${encodeURIComponent(eventCode)}`;
-            setEntranceData(remoteEvent);
+            setEntranceData(markEntranceSource(remoteEvent, "cloud"));
             setMode("entrance");
             return;
           }
         } catch {}
       }
 
-      if (savedSetup) {
-        window.location.hash = `event=${enc(currentEvent)}`;
-        setEntranceData(currentEvent);
-        setMode("entrance");
-        return;
-      }
-
-      setBootError("No published entrance event is available yet. Ask staff to publish the event first.");
-      setMode("error");
+      window.location.hash = `event=${enc(currentEvent)}`;
+      setEntranceData(markEntranceSource(currentEvent, "local"));
+      setMode("entrance");
     };
 
     open();
+  };
+
+  const openEntranceByCode = async (rawCode) => {
+    const code = String(rawCode || "").trim().toUpperCase();
+    if (!code) {
+      setLandingError("Enter the meeting code first.");
+      return;
+    }
+    if (!cloudReady) {
+      setLandingError("Cloud event lookup is not available on this build.");
+      return;
+    }
+
+    try {
+      const remoteEvent = await loadEvent(code);
+      if (!remoteEvent) {
+        setLandingError(`No event was found for code ${code}.`);
+        return;
+      }
+      setLandingError("");
+      setLandingCode(code);
+      window.location.hash = `eventCode=${encodeURIComponent(code)}`;
+      setEntranceData(markEntranceSource(remoteEvent, "cloud"));
+      setMode("entrance");
+    } catch (error) {
+      setLandingError(String(error?.message || error));
+    }
   };
 
   const openAdminView = () => {
@@ -499,13 +531,11 @@ export default function App() {
       (pData.teachers || [])
         .map((t) => {
           const m = meetings?.[t.id] || {};
-          return `${m.done ? "✓" : "○"} ${t.name} (${t.subject})${t.time ? ` · ${t.time}` : ""}${t.room ? ` · ${t.room}` : ""}${t.floor ? ` · ${t.floor}` : ""}${m.notes ? `\n${m.notes}` : ""}`;
+          return `${m.done ? "✓" : "○"} ${t.name} (${t.subject})${t.time ? ` · ${t.time}` : ""}${t.room ? ` · ${t.room}` : ""}${t.floor ? ` · ${t.floor}` : ""}${m.followUp ? "\nNeeds follow-up" : ""}${m.notes ? `\n${m.notes}` : ""}`;
         })
         .join("\n\n");
 
-    window.location.href = `mailto:${encodeURIComponent(
-      pData.notesEmail || ""
-    )}?subject=${encodeURIComponent(
+    window.location.href = `mailto:?subject=${encodeURIComponent(
       `${pData.evtName} Notes${pData.child ? ` — ${pData.child}` : ""}`
     )}&body=${encodeURIComponent(body)}`;
   };
@@ -520,6 +550,7 @@ export default function App() {
   if (mode === "parent" && pData) {
     const ts = Array.isArray(pData?.teachers) ? pData.teachers : [];
     const done = Object.values(meetings || {}).filter((m) => m?.done).length;
+    const followUpCount = Object.values(meetings || {}).filter((m) => m?.followUp).length;
     const total = ts.length;
     const pct = total ? Math.round((done / total) * 100) : 0;
     const all = done === total && total > 0;
@@ -533,7 +564,10 @@ export default function App() {
           {pData.evtDate && <div style={{ fontSize: 12, opacity: 0.5 }}>{fmtDate(pData.evtDate)}</div>}
           <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 14, padding: "14px 16px", marginTop: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-              <div style={{ fontSize: 13, opacity: 0.85 }}>{all ? "All done!" : `${total - done} meeting${total - done !== 1 ? "s" : ""} remaining`}</div>
+              <div style={{ fontSize: 13, opacity: 0.85 }}>
+                {all ? "All done!" : `${total - done} meeting${total - done !== 1 ? "s" : ""} remaining`}
+                {followUpCount ? ` · ${followUpCount} need follow-up` : ""}
+              </div>
               <div style={{ fontFamily: "'Fraunces',serif", fontSize: 22, fontWeight: 700 }}>{pct}%</div>
             </div>
             <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 999, height: 8, overflow: "hidden" }}>
@@ -563,7 +597,10 @@ export default function App() {
                   </button>
                   <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setExpanded(ex ? null : t.id)}>
                     <div style={{ fontWeight: 600, fontSize: 15, color: m.done ? "#5A7A65" : "#1C1C1C", textDecoration: m.done ? "line-through" : "none" }}>{t.name}</div>
-                    <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 2 }}>{[t.subject, t.room, t.floor].filter(Boolean).join(" · ")}</div>
+                    <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 2 }}>
+                      {[t.subject, t.room, t.floor].filter(Boolean).join(" · ")}
+                      {m.followUp ? " · needs follow-up" : ""}
+                    </div>
                   </div>
                   <div style={{ textAlign: "right", cursor: "pointer", flexShrink: 0 }} onClick={() => setExpanded(ex ? null : t.id)}>
                     {t.time && <div style={{ fontSize: 12, fontWeight: 700, color: A }}>{t.time}</div>}
@@ -572,6 +609,28 @@ export default function App() {
                 </div>
                 {ex && (
                   <div style={{ borderTop: "1px solid #ECEAE6", padding: "14px 16px", background: "rgba(255,255,255,0.5)" }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                      <button
+                        onClick={() =>
+                          setMeetings((p) => ({
+                            ...p,
+                            [t.id]: { ...p[t.id], followUp: !p[t.id]?.followUp },
+                          }))
+                        }
+                        style={{
+                          background: m.followUp ? "#FFF0E3" : "#F5F2EE",
+                          color: m.followUp ? A : "#6F655B",
+                          border: m.followUp ? `1.5px solid ${A}` : "1.5px solid #E0D8CC",
+                          borderRadius: 999,
+                          padding: "8px 12px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {m.followUp ? "Needs follow-up" : "Mark for follow-up"}
+                      </button>
+                    </div>
                     <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#9A9A9A", marginBottom: 8 }}>Notes</div>
                     <textarea value={m.notes || ""} onChange={(e) => setMeetings((p) => ({ ...p, [t.id]: { ...p[t.id], notes: e.target.value } }))} rows={3} style={{ width: "100%", border: "1.5px solid #E0D8CC", borderRadius: 12, padding: "10px 14px", fontSize: 14, resize: "none", fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box" }} />
                   </div>
@@ -583,7 +642,7 @@ export default function App() {
 
         <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, padding: "12px 16px 28px", background: `linear-gradient(to top,${CR} 65%,transparent)` }}>
           <button onClick={sendEmail} style={{ width: "100%", padding: "16px 20px", background: all ? G : done > 0 ? A : "#C4BDB5", color: "white", border: "none", borderRadius: 16, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-            {pData.notesEmail ? (all ? "Email notes to school" : done > 0 ? `Email notes so far (${done}/${total})` : "Email notes") : "Set notes email in admin"}
+            {all ? "Email notes to myself" : done > 0 || followUpCount > 0 ? `Email notes so far (${done}/${total})` : "Open email draft"}
           </button>
         </div>
       </div>
@@ -603,10 +662,13 @@ export default function App() {
           teacherCount={teachers.length}
           classCount={classes.length}
           studentCount={students.length}
-          onOpenEntrance={openEntranceView}
+          onOpenEntrance={openEntranceByCode}
           onOpenAdmin={openAdminView}
           onOpenEventQr={() => setShowEventQr(true)}
           adminConfigured={Boolean(adminPin)}
+          landingCode={landingCode}
+          setLandingCode={setLandingCode}
+          landingError={landingError}
         />
         {showEventQr && (
           <QrModal
@@ -815,7 +877,6 @@ function HomeView({
   school,
   evtName,
   evtDate,
-  eventCode,
   cloudReady,
   publishState,
   teacherCount,
@@ -823,28 +884,44 @@ function HomeView({
   studentCount,
   onOpenEntrance,
   onOpenAdmin,
-  onOpenEventQr,
   adminConfigured,
+  landingCode,
+  setLandingCode,
+  landingError,
 }) {
   const statusLabel = cloudReady
-    ? publishState || "Parents can use the entrance search and meeting list."
-    : "Firebase config is missing, so sharing stays in local preview mode.";
+    ? publishState || "Enter the meeting code from the school to open the student list."
+    : "Cloud event lookup is unavailable on this build.";
 
   return (
     <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", paddingBottom: 28 }}>
       <div style={{ background: `linear-gradient(180deg, ${G} 0%, #264636 100%)`, color: "white", padding: "28px 20px 30px" }}>
-        <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, marginBottom: 8 }}>Parent Entrance</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8 }}>
+          <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55 }}>Welcome</div>
+          <button onClick={onOpenAdmin} style={{ background: "transparent", color: "rgba(255,255,255,0.76)", border: "none", padding: 0, fontSize: 13, textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>
+            {adminConfigured ? "Staff login" : "Staff dashboard"}
+          </button>
+        </div>
         <div style={{ fontFamily: "'Fraunces',serif", fontSize: 34, lineHeight: 1.02, marginBottom: 10 }}>{school}</div>
         <div style={{ fontSize: 18, opacity: 0.92, marginBottom: 4 }}>{evtName}</div>
         {evtDate && <div style={{ fontSize: 13, opacity: 0.66 }}>{fmtDate(evtDate)}</div>}
         <div style={{ marginTop: 22, background: "rgba(255,255,255,0.12)", borderRadius: 20, padding: "18px 16px" }}>
           <div style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.92 }}>
-            Search for the student name and open the meeting checklist on the parent phone.
+            Parents should open the student list with the meeting code provided by the school.
           </div>
-          <Btn amber full onClick={onOpenEntrance} style={{ padding: "14px 16px", fontSize: 15, marginTop: 16 }}>Find my child</Btn>
-          <button onClick={onOpenAdmin} style={{ marginTop: 14, background: "transparent", color: "rgba(255,255,255,0.76)", border: "none", padding: 0, fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>
-            {adminConfigured ? "Staff login" : "Open staff dashboard"}
-          </button>
+          <input
+            value={landingCode}
+            onChange={(event) => setLandingCode(event.target.value.toUpperCase())}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") onOpenEntrance(landingCode);
+            }}
+            placeholder="Enter meeting code"
+            style={{ ...iBase, marginTop: 16, background: "rgba(255,255,255,0.96)" }}
+          />
+          <Btn amber full onClick={() => onOpenEntrance(landingCode)} style={{ padding: "14px 16px", fontSize: 15, marginTop: 10 }}>
+            Open student search
+          </Btn>
+          {landingError && <div style={{ marginTop: 10, fontSize: 12, color: "#FFD5D5" }}>{landingError}</div>}
         </div>
       </div>
 
@@ -866,11 +943,6 @@ function HomeView({
           <div style={{ background: cloudReady ? "#E8F0EC" : "#FFF0E3", borderRadius: 14, padding: "12px 14px", fontSize: 13, color: G, marginBottom: 14 }}>
             {statusLabel}
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", fontSize: 13, color: "#75695E", marginBottom: 14 }}>
-            <span>Event code</span>
-            <strong style={{ color: G, letterSpacing: 1 }}>{eventCode || "Not set"}</strong>
-          </div>
-          <Btn full light onClick={onOpenEventQr}>Show entrance QR</Btn>
         </Card>
       </div>
     </div>
