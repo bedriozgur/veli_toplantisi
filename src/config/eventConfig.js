@@ -8,8 +8,8 @@ export const DEFAULT_EVENT = "Veli Toplantısı Portalı";
 export const DEFAULT_NOTES_EMAIL = "bilgi@tedbursa.k12.tr";
 export const DEFAULT_ADMIN_PIN = "";
 export const DEFAULT_EVENT_STATUS = "draft";
-export const DEFAULT_START_TIME = "18:00";
-export const DEFAULT_END_TIME = "20:00";
+export const DEFAULT_START_TIME = "09:00";
+export const DEFAULT_END_TIME = "15:00";
 export const DEFAULT_LANDING_HELP =
   "Toplantı kodunuzu girerek öğrenci arama ve görüşme listesine ulaşabilirsiniz.";
 export const DEFAULT_LANDING_NOTE =
