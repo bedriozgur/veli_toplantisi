@@ -1066,12 +1066,12 @@ function HomeView({
     ? publishState || "Enter the meeting code from the school to open your meeting plan."
     : "Cloud event lookup is unavailable on this build.";
   const showNeutralBrand = !schoolLogo && (!school || school === DEFAULT_SCHOOL) && (!evtName || evtName === DEFAULT_EVENT);
-  const landingSchool = showNeutralBrand ? "School Meeting Portal" : school;
-  const landingEvent = showNeutralBrand ? "Parent and teacher meeting access" : evtName;
+  const landingSchool = school || "TED Bursa Koleji";
+  const landingEvent = evtName || "Veli Toplantısı Portalı";
   const topWelcome = language === "tr" ? "Okul Toplantı Portalına Hoş Geldiniz" : "Welcome to the School Meeting Portal";
   const entryPrompt = language === "tr" ? "Toplantı kodunuzu girin" : "Enter your meeting code";
   const loginLabel = language === "tr" ? "Toplantı Portalına Giriş" : "Login to the Meeting Portal";
-  const howToStartLabel = language === "tr" ? "Nasıl Başlanır" : "How To Start";
+  const howToStartLabel = language === "tr" ? "Nasıl Yapılır" : "How it is Done";
   const langButtonLabel = language === "tr" ? "EN" : "TR";
 
   return (
