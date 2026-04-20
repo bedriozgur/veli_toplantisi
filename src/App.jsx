@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   normalizeParentPayload,
   buildMeetingsState,
+  normalizeTeachers,
 } from "./utils/normalizeData";
 import { isCloudConfigured, loadEvent, loadProgress, publishEvent, saveProgress } from "./cloud";
 import {
