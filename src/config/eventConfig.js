@@ -3,17 +3,17 @@ import classesSeed from "../data/classes.json";
 import studentsSeed from "../data/students.json";
 import { normalizeClasses, normalizeStudents, normalizeTeachers } from "../utils/normalizeData";
 
-export const DEFAULT_SCHOOL = "Oakwood Academy";
-export const DEFAULT_EVENT = "Parents' Evening";
-export const DEFAULT_NOTES_EMAIL = "parents-evening@school.org";
+export const DEFAULT_SCHOOL = "TED Bursa Koleji";
+export const DEFAULT_EVENT = "Veli Toplantısı Portalı";
+export const DEFAULT_NOTES_EMAIL = "bilgi@tedbursa.k12.tr";
 export const DEFAULT_ADMIN_PIN = "";
 export const DEFAULT_EVENT_STATUS = "draft";
 export const DEFAULT_START_TIME = "18:00";
 export const DEFAULT_END_TIME = "20:00";
 export const DEFAULT_LANDING_HELP =
-  "Enter the meeting code shared by the school to open the student search and meeting list.";
+  "Toplantı kodunuzu girerek öğrenci arama ve görüşme listesine ulaşabilirsiniz.";
 export const DEFAULT_LANDING_NOTE =
-  "If you need help, staff at the entrance can open the correct student page for you.";
+  "Yardıma ihtiyacınız olursa girişteki görevli sizi doğru öğrenci sayfasına yönlendirebilir.";
 
 export function makeEventCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
