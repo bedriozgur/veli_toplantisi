@@ -1,3 +1,4 @@
+import logoImg from "./assets/logo.png";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   normalizeParentPayload,
@@ -22,7 +23,6 @@ import {
   isEventExpired,
   makeEventCode,
   normalizeAdminState,
-  schoolInitials,
 } from "./config/eventConfig";
 import {
   CLASS_TEMPLATE_CSV,
@@ -370,7 +370,7 @@ export default function App() {
     evtDate,
     startTime,
     endTime,
-    notesEmail,
+     notesEmail,
     eventCode,
     eventStatus,
     expiresAt,
@@ -1085,13 +1085,51 @@ function HomeView({
         </button>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, textAlign: "center", marginBottom: 8 }}>{topWelcome}</div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 34, marginBottom: 22 }}>
-          <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: schoolLogo ? 18 : 0, boxSizing: "border-box" }}>
-            {schoolLogo ? (
-              <img src={schoolLogo} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-            ) : (
-              <div style={{ width: 94, height: 94, borderRadius: 28, background: CR, color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 34, fontWeight: 800 }}>
-                {schoolInitials(landingSchool) || "SM"}
-              </div>
+          <div
+
+  style={{
+
+    width: 168,
+
+    minHeight: 168,
+
+    borderRadius: 38,
+
+    background: "#FFFFFF",
+
+    border: "1px solid rgba(255,255,255,0.32)",
+
+    display: "flex",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+
+    marginBottom: 22,
+
+    overflow: "hidden",
+
+    padding: 18,
+
+    boxSizing: "border-box",
+
+  }}
+
+>
+
+  <img
+
+    src={logoImg}
+
+    alt={`${landingSchool} logo`}
+
+    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+
+  />
+
+</div>
             )}
           </div>
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{landingSchool}</div>
@@ -1208,13 +1246,7 @@ function AdminDashboard({
         </div>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-          {schoolLogo ? (
-            <img src={schoolLogo} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: CR, padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
-              {schoolInitials(school) || "SM"}
-            </div>
-          )}
+          <img src={logoImg} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school}</div>
         </div>
         <div style={{ fontSize: 15, opacity: 0.88 }}>{evtName}</div>
@@ -1312,7 +1344,6 @@ function SettingsTab({
   setAdminPin,
 }) {
   const fileInputRef = useRef(null);
-  const logoInputRef = useRef(null);
 
   const importFile = async (event) => {
     const file = event.target.files?.[0];
@@ -1322,35 +1353,17 @@ function SettingsTab({
     event.target.value = "";
   };
 
-  const importLogo = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSchoolLogo(typeof reader.result === "string" ? reader.result : "");
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  };
 
   return (
     <div>
       <div style={{ background: "white", borderRadius: 16, padding: "16px 18px", marginBottom: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
         <SLabel>Event Details</SLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          {schoolLogo ? (
-            <img src={schoolLogo} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box" }} />
-          ) : (
-            <div style={{ width: 56, height: 56, borderRadius: 16, background: "#F5F0E8", color: G, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope',sans-serif", fontSize: 18, fontWeight: 800 }}>
-              {schoolInitials(school) || "SM"}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Btn light onClick={() => logoInputRef.current?.click()}>Upload logo</Btn>
-            {schoolLogo && <Btn light onClick={() => setSchoolLogo("")}>Remove logo</Btn>}
+          <img src={logoImg} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box" }} />
+          <div style={{ fontSize: 12, color: "#75695E", lineHeight: 1.5 }}>
+            Fixed app logo from <code>src/assets/logo.png</code>
           </div>
         </div>
-        <input ref={logoInputRef} type="file" accept="image/*" onChange={importLogo} style={{ display: "none" }} />
         <input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="School name" style={{ ...iBase, marginBottom: 8 }} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
           <input value={evtName} onChange={(e) => setEvtName(e.target.value)} placeholder="Event name" style={iBase} />
