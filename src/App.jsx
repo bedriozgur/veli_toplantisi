@@ -355,6 +355,8 @@ export default function App() {
         endTime,
         notesEmail,
         eventCode,
+        eventStatus,
+        expiresAt,
         landingHelpText,
         landingNoteText,
         teachers,
@@ -380,6 +382,8 @@ export default function App() {
     classes,
     students,
   ]);
+
+  const resolvedLogo = schoolLogo || logoImg;
 
   useEffect(() => {
     if (adminPin) {
@@ -870,6 +874,8 @@ export default function App() {
           <TeachersTab
             teachers={teachers}
             setTeachers={setTeachers}
+            classes={classes}
+            setClasses={setClasses}
             onRemove={(id) => {
               setTeachers((p) => p.filter((t) => t.id !== id));
               setClasses((p) => p.map((c) => ({ ...c, tids: Array.isArray(c.tids) ? c.tids.filter((x) => x !== id) : [] })));
@@ -1085,7 +1091,7 @@ function HomeView({
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, textAlign: "center", marginBottom: 8 }}>{topWelcome}</div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 34, marginBottom: 22 }}>
           <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: 18, boxSizing: "border-box" }}>
-            <img src={logoImg} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <img src={resolvedLogo} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
           </div>
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{landingSchool}</div>
           <div style={{ fontSize: 18, opacity: 0.92 }}>{landingEvent}</div>
@@ -1201,7 +1207,7 @@ function AdminDashboard({
         </div>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-          <img src={logoImg} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
+          <img src={resolvedLogo} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school}</div>
         </div>
         <div style={{ fontSize: 15, opacity: 0.88 }}>{evtName}</div>
@@ -1325,7 +1331,7 @@ function SettingsTab({
       <div style={{ background: "white", borderRadius: 16, padding: "16px 18px", marginBottom: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
         <SLabel>Event Details</SLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <img src={logoImg} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box",  }} />
+          <img src={resolvedLogo} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box" }} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn light onClick={() => logoInputRef.current?.click()}>Upload logo</Btn>
             {schoolLogo && <Btn light onClick={() => setSchoolLogo("")}>Remove logo</Btn>}
@@ -1410,10 +1416,11 @@ function SettingsTab({
   );
 }
 
-function TeachersTab({ teachers, setTeachers, onRemove }) {
+function TeachersTab({ teachers, setTeachers, classes, setClasses, onRemove }) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: "", subject: "", room: "", floor: "", time: "", status: "active", note: "" });
   const [editId, setEditId] = useState(null);
+  const [assignId, setAssignId] = useState(null);
   const [editFm, setEditFm] = useState({});
   const csvInputRef = useRef(null);
 
@@ -1442,6 +1449,21 @@ function TeachersTab({ teachers, setTeachers, onRemove }) {
 
   const downloadTeacherTemplate = () => {
     downloadTextFile("teachers-template.csv", TEACHER_TEMPLATE_CSV, "text/csv;charset=utf-8;");
+  };
+
+  const toggleTeacherClass = (teacherId, classId) => {
+    setClasses((previous) =>
+      previous.map((cls) =>
+        cls.id !== classId
+          ? cls
+          : {
+              ...cls,
+              tids: (cls.tids || []).includes(teacherId)
+                ? (cls.tids || []).filter((id) => id !== teacherId)
+                : [...(cls.tids || []), teacherId],
+            }
+      )
+    );
   };
 
   return (
@@ -1504,16 +1526,71 @@ function TeachersTab({ teachers, setTeachers, onRemove }) {
               </div>
             </>
           ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</div>
-                <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>
-                  {[t.subject, t.room, t.floor, t.status === "unavailable" ? "İzinli" : t.time, t.note].filter(Boolean).join(" · ")}
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</div>
+                  <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>
+                    {[t.subject, t.room, t.floor, t.status === "unavailable" ? "İzinli" : t.time, t.note].filter(Boolean).join(" · ")}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#7D746C", marginTop: 6 }}>
+                    {(classes || []).filter((cls) => (cls.tids || []).includes(t.id)).map((cls) => cls.name).join(", ") || "No classes assigned"}
+                  </div>
                 </div>
+                <Btn light onClick={() => setAssignId(assignId === t.id ? null : t.id)}>
+                  {assignId === t.id ? "Done" : "Classes"}
+                </Btn>
+                <IBtn onClick={() => { setEditId(t.id); setEditFm({ ...t }); }}>✎</IBtn>
+                <IBtn onClick={() => onRemove(t.id)} red>✕</IBtn>
               </div>
-              <IBtn onClick={() => { setEditId(t.id); setEditFm({ ...t }); }}>✎</IBtn>
-              <IBtn onClick={() => onRemove(t.id)} red>✕</IBtn>
-            </div>
+              {assignId === t.id && (
+                <div style={{ borderTop: "1px solid #F0EBE3", marginTop: 12, paddingTop: 12 }}>
+                  <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#9A9A9A", marginBottom: 8 }}>
+                    Assign Classes
+                  </div>
+                  {(classes || []).map((cls) => {
+                    const checked = (cls.tids || []).includes(t.id);
+                    const studentCount = cls.id ? classTeacherCount({ classes, teachers, students: [] }, cls.id) : 0;
+                    return (
+                      <div
+                        key={cls.id}
+                        onClick={() => toggleTeacherClass(t.id, cls.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "10px 0",
+                          borderBottom: "1px solid #F5F2EE",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 6,
+                            border: checked ? `2px solid ${G}` : "2px solid #D4CCC4",
+                            background: checked ? G : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {checked && <span style={{ color: "white", fontSize: 13 }}>✓</span>}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700 }}>{cls.name}</div>
+                          <div style={{ fontSize: 12, color: "#9A9A9A", marginTop: 2 }}>
+                            {studentCount} active teachers on this class
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </Card>
       ))}

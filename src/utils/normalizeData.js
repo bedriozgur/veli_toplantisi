@@ -36,8 +36,14 @@ export function normalizeParentPayload(raw) {
     school: raw?.school || "",
     evtName: raw?.evtName || "",
     evtDate: raw?.evtDate || "",
+    startTime: raw?.startTime || "",
+    endTime: raw?.endTime || "",
+    notesEmail: raw?.notesEmail || "",
+    eventCode: raw?.eventCode || "",
     child: raw?.child || "",
     parent: raw?.parent || "",
+    className: raw?.className || "",
+    studentId: Number.isFinite(Number(raw?.studentId)) ? Number(raw.studentId) : null,
     teachers: normalizeTeachers(raw?.teachers || []),
   };
 }
