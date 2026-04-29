@@ -1902,6 +1902,8 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState("");
   const [openId, setOpenId] = useState(null);
+  const [editId, setEditId] = useState("");
+  const [editName, setEditName] = useState("");
   const csvInputRef = useRef(null);
 
   const addC = () => {
@@ -1935,6 +1937,19 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
       )
     );
 
+  const beginRename = (cls) => {
+    setEditId(cls.id);
+    setEditName(cls.name || "");
+  };
+
+  const finishRename = () => {
+    const nextName = String(editName || "").trim();
+    if (!editId || !nextName) return;
+    setClasses((previous) => previous.map((cls) => (cls.id === editId ? { ...cls, name: nextName } : cls)));
+    setEditId("");
+    setEditName("");
+  };
+
   return (
     <div>
       <Row>
@@ -1955,9 +1970,27 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
           <div key={cls.id} style={{ background: "white", borderRadius: 16, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: G }}>{cls.name}</div>
+                {editId === cls.id ? (
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onBlur={finishRename}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") finishRename();
+                      if (event.key === "Escape") {
+                        setEditId("");
+                        setEditName("");
+                      }
+                    }}
+                    autoFocus
+                    style={{ ...iBase, marginBottom: 4 }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 18, fontWeight: 800, color: G }}>{cls.name}</div>
+                )}
                 <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>{activeTeacherCount} teachers · {stuCount} students</div>
               </div>
+              <Btn onClick={() => beginRename(cls)} light>Edit</Btn>
               <Btn onClick={() => setOpenId(isOpen ? null : cls.id)} style={{ background: isOpen ? G : "#E8F0EC", color: isOpen ? "white" : G }}>{isOpen ? "Done ✓" : "Edit Teachers"}</Btn>
               <IBtn onClick={() => onRemove(cls.id)} red>✕</IBtn>
             </div>
@@ -1989,6 +2022,8 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
   const [bulkText, setBulkText] = useState("");
   const [bulkCid, setBulkCid] = useState("");
   const [filter, setFilter] = useState("all");
+  const [editId, setEditId] = useState("");
+  const [editForm, setEditForm] = useState({ child: "", parent: "", cid: "", arrivedAt: "", arrivedMarkedBy: "" });
   const csvInputRef = useRef(null);
 
   const addOne = () => {
@@ -2020,6 +2055,37 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
 
   const downloadStudentTemplate = () => {
     downloadTextFile("students-template.csv", STUDENT_TEMPLATE_CSV, "text/csv;charset=utf-8;");
+  };
+
+  const beginEdit = (student) => {
+    setEditId(student.id);
+    setEditForm({
+      child: student.child || "",
+      parent: student.parent || "",
+      cid: student.cid || "",
+      arrivedAt: student.arrivedAt || "",
+      arrivedMarkedBy: student.arrivedMarkedBy || "",
+    });
+  };
+
+  const finishEdit = () => {
+    if (!editId) return;
+    setStudents((previous) =>
+      previous.map((student) =>
+        student.id === editId
+          ? {
+              ...student,
+              child: editForm.child || student.child,
+              parent: editForm.parent || "",
+              cid: editForm.cid || null,
+              arrivedAt: editForm.arrivedAt || null,
+              arrivedMarkedBy: editForm.arrivedMarkedBy || null,
+            }
+          : student
+      )
+    );
+    setEditId("");
+    setEditForm({ child: "", parent: "", cid: "", arrivedAt: "", arrivedMarkedBy: "" });
   };
 
   return (
@@ -2085,16 +2151,40 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
         return (
           <div key={s.id} style={{ background: "white", borderRadius: 14, padding: "13px 16px", marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 17, fontWeight: 800 }}>{s.child}</div>
+              {editId === s.id ? (
+                <div style={{ display: "grid", gap: 8, marginBottom: 8 }}>
+                  <input value={editForm.child} onChange={(e) => setEditForm((p) => ({ ...p, child: e.target.value }))} style={iBase} />
+                  <input value={editForm.parent} onChange={(e) => setEditForm((p) => ({ ...p, parent: e.target.value }))} placeholder="Parent name" style={iBase} />
+                  <select value={editForm.cid} onChange={(e) => setEditForm((p) => ({ ...p, cid: e.target.value }))} style={iBase}>
+                    <option value="">Assign to class…</option>
+                    {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <input value={editForm.arrivedAt} onChange={(e) => setEditForm((p) => ({ ...p, arrivedAt: e.target.value }))} placeholder="Arrival timestamp" style={iBase} />
+                    <input value={editForm.arrivedMarkedBy} onChange={(e) => setEditForm((p) => ({ ...p, arrivedMarkedBy: e.target.value }))} placeholder="Marked by" style={iBase} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn onClick={finishEdit}>Save</Btn>
+                    <Btn light onClick={() => { setEditId(""); setEditForm({ child: "", parent: "", cid: "", arrivedAt: "", arrivedMarkedBy: "" }); }}>Cancel</Btn>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 17, fontWeight: 800 }}>{s.child}</div>
+              )}
               <div style={{ fontSize: 13, color: cls ? "#9A9A9A" : "#D44", marginTop: 3 }}>
                 {cls ? `${cls.name} · ${activeTeacherCount} teacher${activeTeacherCount !== 1 ? "s" : ""}` : "⚠ No class assigned"}
                 {s.parent ? ` · ${s.parent}` : ""}
                 {s.arrivedAt ? " · arrived" : ""}
               </div>
             </div>
-            <button onClick={() => setQrStuId(qrStuId === s.id ? null : s.id)} style={{ background: qrStuId === s.id ? G : "#E8F0EC", color: qrStuId === s.id ? "white" : G, border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              {qrStuId === s.id ? "▲ Close" : "QR"}
-            </button>
+            <div style={{ display: "grid", gap: 6 }}>
+              <button onClick={() => beginEdit(s)} style={{ background: "#F0EBE3", color: G, border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                Edit
+              </button>
+              <button onClick={() => setQrStuId(qrStuId === s.id ? null : s.id)} style={{ background: qrStuId === s.id ? G : "#E8F0EC", color: qrStuId === s.id ? "white" : G, border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {qrStuId === s.id ? "▲ Close" : "QR"}
+              </button>
+            </div>
           </div>
         );
       })}
