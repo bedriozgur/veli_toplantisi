@@ -459,30 +459,42 @@ export default function AdminMeetingDetail() {
                 </summary>
                 <div style={styles.disclosureBody}>
                   <div style={styles.teacherGrid}>
-                    <input
-                      value={teacher.name || ""}
-                      onChange={(event) => updateTeacherField(teacher.id, "name", event.target.value)}
-                      placeholder={t("admin.detailTeacherName")}
-                      style={styles.input}
-                    />
-                    <input
-                      value={teacher.subject || ""}
-                      onChange={(event) => updateTeacherField(teacher.id, "subject", event.target.value)}
-                      placeholder={t("admin.detailTeacherSubject")}
-                      style={styles.input}
-                    />
-                    <input
-                      value={teacher.room || ""}
-                      onChange={(event) => updateTeacherField(teacher.id, "room", event.target.value)}
-                      placeholder={t("admin.detailTeacherRoom")}
-                      style={styles.input}
-                    />
-                    <input
-                      value={teacher.floor || ""}
-                      onChange={(event) => updateTeacherField(teacher.id, "floor", event.target.value)}
-                      placeholder={t("admin.detailTeacherFloor")}
-                      style={styles.input}
-                    />
+                    <label style={styles.field}>
+                      <span style={styles.fieldLabel}>{t("admin.detailTeacherName")}</span>
+                      <input
+                        value={teacher.name || ""}
+                        onChange={(event) => updateTeacherField(teacher.id, "name", event.target.value)}
+                        placeholder={t("admin.detailTeacherName")}
+                        style={styles.input}
+                      />
+                    </label>
+                    <label style={styles.field}>
+                      <span style={styles.fieldLabel}>{t("admin.detailTeacherSubject")}</span>
+                      <input
+                        value={teacher.subject || ""}
+                        onChange={(event) => updateTeacherField(teacher.id, "subject", event.target.value)}
+                        placeholder={t("admin.detailTeacherSubject")}
+                        style={styles.input}
+                      />
+                    </label>
+                    <label style={styles.field}>
+                      <span style={styles.fieldLabel}>{t("admin.detailTeacherRoom")}</span>
+                      <input
+                        value={teacher.room || ""}
+                        onChange={(event) => updateTeacherField(teacher.id, "room", event.target.value)}
+                        placeholder={t("admin.detailTeacherRoom")}
+                        style={styles.input}
+                      />
+                    </label>
+                    <label style={styles.field}>
+                      <span style={styles.fieldLabel}>{t("admin.detailTeacherFloor")}</span>
+                      <input
+                        value={teacher.floor || ""}
+                        onChange={(event) => updateTeacherField(teacher.id, "floor", event.target.value)}
+                        placeholder={t("admin.detailTeacherFloor")}
+                        style={styles.input}
+                      />
+                    </label>
                   </div>
 
                   <div style={styles.teacherActions}>
@@ -576,7 +588,7 @@ function buildTeacherSummary(teacher, t) {
   const subject = teacher.subject || t("admin.detailTeacherSubject");
   const locationParts = [teacher.floor || "", teacher.room || ""].filter(Boolean);
   const location = locationParts.length ? locationParts.join(" - ") : t("admin.detailTeacherLocation");
-  const classCount = `${(teacher.classIds || []).length} ${t("admin.detailClassUnit")}`;
+  const classCount = `${(teacher.classIds || []).length} Sınıf`;
   return [subject, location, classCount].join(" · ");
 }
 

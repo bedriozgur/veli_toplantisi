@@ -344,7 +344,7 @@ export const MESSAGES = {
     "admin.detailTeacherLabel": "Öğretmen",
     "admin.detailTeacherName": "Öğretmen adı",
     "admin.detailTeacherSubject": "Branş",
-    "admin.detailTeacherRoom": "Oda",
+    "admin.detailTeacherRoom": "Derslik",
     "admin.detailTeacherFloor": "Kat",
     "admin.detailTeacherLocation": "Konum",
     "admin.detailClassUnit": "Sınıf",
