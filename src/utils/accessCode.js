@@ -1,13 +1,19 @@
-export function generateAccessCode(grade, branch) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const random = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  return `${grade}${branch}-${random}`;
+function randomLetters(length) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+function randomDigits(length) {
+  const chars = "23456789";
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+export function generateAccessCode() {
+  return `${randomLetters(3)}-${randomDigits(3)}`;
 }
 
 export function generateMeetingAccessCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const random = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  return `MEET-${random}`;
+  return generateAccessCode();
 }
 
 export function buildMailtoLink({ label, meetingTitle, date, teachers, meetings }) {

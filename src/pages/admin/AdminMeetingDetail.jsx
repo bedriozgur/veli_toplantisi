@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import QRCode from "qrcode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import {
@@ -259,21 +260,25 @@ export default function AdminMeetingDetail() {
           </p>
         </div>
 
-        <div style={styles.heroMeta}>
-          <div style={styles.metaCard}>
-            <span style={styles.metaLabel}>{t("admin.detailRole")}</span>
-            <strong>{currentUser?.email || t("admin.detailSession")}</strong>
-          </div>
+          <div style={styles.heroMeta}>
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>{t("admin.detailRole")}</span>
+              <strong>{currentUser?.email || t("admin.detailSession")}</strong>
+            </div>
           <div style={styles.metaCard}>
             <span style={styles.metaLabel}>{t("admin.detailClassCount")}</span>
             <strong>{classes.length}</strong>
           </div>
-          <div style={styles.metaCard}>
-            <span style={styles.metaLabel}>{t("parent.meetingCode")}</span>
-            <strong>{meeting.meetingCode || t("admin.detailNone")}</strong>
+            <div style={styles.metaCard}>
+              <span style={styles.metaLabel}>{t("parent.meetingCode")}</span>
+              <strong>{meeting.meetingCode || t("admin.detailNone")}</strong>
+            </div>
+            <QrBlock
+              label={t("admin.detailMeetingQr")}
+              value={buildParentRoute(meeting.meetingCode)}
+            />
           </div>
-        </div>
-      </section>
+        </section>
 
       <div style={styles.tabs}>
         <button type="button" onClick={() => setActiveTab("settings")} style={tabStyle(activeTab === "settings")}>
@@ -399,6 +404,12 @@ export default function AdminMeetingDetail() {
                   <span style={styles.disclosureHint}>{t("admin.detailClickToEdit")}</span>
                 </summary>
                 <div style={styles.disclosureBody}>
+                  <QrBlock
+                    label={t("admin.detailClassQr")}
+                    value={buildParentRoute(classItem.accessCode)}
+                    compact
+                  />
+
                   <div style={styles.teacherPicks}>
                     {teacherList.length ? (
                       teacherList.map((teacher) => {
@@ -592,6 +603,54 @@ function buildTeacherSummary(teacher, t) {
   return [subject, location, classCount].join(" · ");
 }
 
+function buildParentRoute(code) {
+  if (!code) return "";
+  if (typeof window === "undefined") return `/parent/${code}`;
+  return `${window.location.origin}/parent/${code}`;
+}
+
+function QrBlock({ label, value, compact = false }) {
+  const [src, setSrc] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!value) {
+      setSrc("");
+      return undefined;
+    }
+
+    QRCode.toDataURL(value, {
+      width: compact ? 128 : 176,
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: {
+        dark: "#111827",
+        light: "#ffffff",
+      },
+    })
+      .then((nextSrc) => {
+        if (!cancelled) setSrc(nextSrc);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [compact, value]);
+
+  if (!value) return null;
+
+  return (
+    <div style={compact ? styles.qrCompactCard : styles.qrCard}>
+      <span style={compact ? styles.qrLabelCompact : styles.qrLabel}>{label}</span>
+      {src ? <img src={src} alt={label} style={compact ? styles.qrCompactImage : styles.qrImage} /> : <div style={compact ? styles.qrLoadingCompact : styles.qrLoading}>...</div>}
+      <small style={compact ? styles.qrValueCompact : styles.qrValue}>{value}</small>
+    </div>
+  );
+}
+
 function splitClassName(className) {
   const normalized = normalizeClassName(className);
   const match = normalized.match(/^(\d+)([A-ZÇĞİÖŞÜ]+)$/);
@@ -691,9 +750,86 @@ const styles = {
     display: "grid",
     gap: 6,
   },
+  qrCard: {
+    borderRadius: 18,
+    padding: 16,
+    background: "rgba(255,255,255,0.08)",
+    display: "grid",
+    gap: 10,
+    justifyItems: "center",
+    textAlign: "center",
+  },
+  qrCompactCard: {
+    borderRadius: 16,
+    padding: 12,
+    background: "#f8fafc",
+    border: "1px solid #e5e7eb",
+    display: "grid",
+    gap: 8,
+    justifyItems: "center",
+    textAlign: "center",
+  },
   metaLabel: {
     color: "rgba(255,255,255,0.62)",
     fontSize: 13,
+  },
+  qrLabel: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 12,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  qrLabelCompact: {
+    color: "#374151",
+    fontSize: 12,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  qrImage: {
+    width: 176,
+    height: 176,
+    borderRadius: 14,
+    background: "#fff",
+  },
+  qrCompactImage: {
+    width: 128,
+    height: 128,
+    borderRadius: 12,
+    background: "#fff",
+  },
+  qrLoading: {
+    width: 176,
+    height: 176,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 14,
+    background: "#fff",
+    color: "#1f2937",
+    fontWeight: 700,
+  },
+  qrLoadingCompact: {
+    width: 128,
+    height: 128,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#1f2937",
+    fontWeight: 700,
+  },
+  qrValue: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 12,
+    fontWeight: 600,
+    wordBreak: "break-all",
+  },
+  qrValueCompact: {
+    color: "#374151",
+    fontSize: 12,
+    fontWeight: 600,
+    wordBreak: "break-all",
   },
   tabs: {
     display: "flex",
@@ -959,6 +1095,10 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
     gap: 8,
+  },
+  teacherQrWrap: {
+    display: "grid",
+    justifyItems: "start",
   },
   linkButton: {
     border: "none",

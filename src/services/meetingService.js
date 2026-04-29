@@ -116,7 +116,7 @@ function readDemoStore() {
     };
     let changed = false;
     for (const meeting of next.meetings) {
-      const code = meeting.meetingCode || (meeting.id === "demo-school-meeting" ? "DEMO-MEETING" : "");
+      const code = meeting.meetingCode || (meeting.id === "demo-school-meeting" ? generateMeetingAccessCode() : "");
       if (code && !meeting.meetingCode) {
         meeting.meetingCode = code;
         changed = true;
@@ -380,7 +380,7 @@ function hydrateDemoMeetingFromSeed(store, meetingId) {
 
   ensureMeetingClassArray(store, meetingId);
 
-  const meetingCode = meeting.meetingCode || (meetingId === seedMeetingId ? "DEMO-MEETING" : generateMeetingAccessCode());
+  const meetingCode = meeting.meetingCode || generateMeetingAccessCode();
   if (!meeting.meetingCode) {
     meeting.meetingCode = meetingCode;
     changed = true;
@@ -419,7 +419,7 @@ function hydrateDemoMeetingFromSeed(store, meetingId) {
         const seedClass = findSeedClass(seedClasses, classLabel);
         const seedStudentsForClass = clone(seedStudents[seedClass?.id || classLabel] || []);
         const { grade, branch } = splitClassName(classLabel);
-        const accessCode = generateAccessCode(seedClass?.grade || grade, seedClass?.branch || branch);
+        const accessCode = generateAccessCode();
         const teachers = clone(seedClass?.teachers || []).map((teacher, teacherIndex) => ({
           ...teacher,
           id: teacher.id || `teacher-${teacherIndex + 1}`,
@@ -561,7 +561,7 @@ function buildSeedTeachers() {
     id: `teacher-${index + 1}`,
     name: makeTeacherName(index + 1),
     subject: TURKISH_SUBJECTS[index % TURKISH_SUBJECTS.length],
-    room: `${(index % 4) + 1}. Kat ${String.fromCharCode(65 + (index % 4))}`,
+    room: `${(index % 4) + 1}. Kat ${String.fromCharCode(65 + (index % 4))} Dersliği`,
     floor: `${(index % 4) + 1}. Kat`,
     time: `${17 + (index % 3)}:${index % 2 === 0 ? "00" : "30"}`,
     status: "active",
@@ -589,6 +589,7 @@ function createTeacherAssignments(teachers, classIndex) {
 
 function buildSeedMeeting() {
   const teachers = buildSeedTeachers();
+  const meetingCode = generateMeetingAccessCode();
   const rooms = Array.from(
     new Map(
       teachers
@@ -616,7 +617,7 @@ function buildSeedMeeting() {
       branch: isHazirlik ? "" : String(classItem.id).replace(/^\d+/, ""),
       meetingTitle: TURKISH_MEETING_TITLE,
       meetingDate: TURKISH_MEETING_DATE,
-      accessCode: isHazirlik ? `HZ-${index + 1}${index + 2}${index + 3}${index + 4}` : `${classItem.id}-DEMO`,
+      accessCode: generateAccessCode(),
       teachers: classTeachers,
       stats: { totalStudents: students.length, visitedCount: 0 },
       students,
@@ -629,7 +630,7 @@ function buildSeedMeeting() {
       title: TURKISH_MEETING_TITLE,
       date: TURKISH_MEETING_DATE,
       status: "active",
-      meetingCode: "DEMO-MEETING",
+      meetingCode,
       grades: TURKISH_CLASSES.map((item) => item.classLabel),
       labels: {
         teacherColumn: "Ogrenci",
@@ -650,9 +651,9 @@ function buildSeedMeeting() {
     accessCodes: Object.fromEntries(
       [
         [
-          "DEMO-MEETING",
+          meetingCode,
           {
-            code: "DEMO-MEETING",
+            code: meetingCode,
             meetingId: "demo-school-meeting",
             classId: "",
             classLabel: "",
@@ -790,7 +791,7 @@ export async function createMeeting({ title, date, grades }, adminUid) {
           const grade = template?.grade || gradeMatch?.[1] || String(className || "").replace(/[^0-9]/g, "") || "1";
           const branch = template?.branch || String(className || "").replace(/^\d+/, "") || "A";
           const teachers = clone(template?.teachers || []);
-          const accessCode = template?.accessCode || generateAccessCode(grade, branch || "A");
+          const accessCode = template?.accessCode || generateAccessCode();
           return {
             id: className,
             classLabel: className,
@@ -1132,7 +1133,7 @@ export async function createClass(meetingId, classData, meetingDateOrMeeting) {
   const meetingDate = normalizeMeetingDate(meetingDateOrMeeting);
   const meetingTitle = normalizeMeetingTitle(meetingDateOrMeeting, classData.meetingTitle || "");
   const classLabel = classData.classLabel || classData.className || classId;
-  const accessCode = generateAccessCode(grade, branch);
+  const accessCode = generateAccessCode();
   const expiryDate = meetingDate ? new Date(`${meetingDate}T23:59:59`) : new Date();
   expiryDate.setHours(23, 59, 59, 999);
   const expiresAt = Timestamp.fromDate(expiryDate);
