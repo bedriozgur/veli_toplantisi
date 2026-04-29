@@ -1,12 +1,64 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /events/{eventCode} {
-      allow read, write: if true;
+    function signedIn() {
+      return request.auth != null;
+    }
 
-      match /progress/{studentId} {
-        allow read, write: if true;
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return signedIn() && role() == "admin";
+    }
+
+    function isFrontDesk() {
+      return signedIn() && (role() == "frontdesk" || role() == "admin");
+    }
+
+    function meetingIsActive(meetingId) {
+      return get(/databases/$(database)/documents/meetings/$(meetingId)).data.status == "active";
+    }
+
+    function codeIsValid(code) {
+      return exists(/databases/$(database)/documents/accessCodes/$(code))
+        && get(/databases/$(database)/documents/accessCodes/$(code)).data.active == true
+        && get(/databases/$(database)/documents/accessCodes/$(code)).data.expiresAt > request.time;
+    }
+
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isAdmin() || isFrontDesk();
+      allow create, update, delete: if isAdmin();
+
+      match /classes/{classId} {
+        allow read: if isAdmin() || isFrontDesk() || (meetingIsActive(meetingId) && codeIsValid(resource.data.accessCode));
+        allow create, update, delete: if isAdmin();
+
+        match /students/{studentId} {
+          allow read: if isAdmin() || isFrontDesk() || (meetingIsActive(meetingId) && codeIsValid(get(/databases/$(database)/documents/meetings/$(meetingId)/classes/$(classId)).data.accessCode));
+          allow create: if isAdmin();
+
+          allow update: if isAdmin()
+            || (isFrontDesk() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["arrivedAt", "arrivedMarkedBy", "updatedAt"]))
+            || (meetingIsActive(meetingId)
+              && codeIsValid(get(/databases/$(database)/documents/meetings/$(meetingId)/classes/$(classId)).data.accessCode)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["meetings", "updatedAt"]));
+
+          allow delete: if isAdmin();
+        }
       }
+    }
+
+    match /accessCodes/{code} {
+      allow read: if isAdmin() || isFrontDesk() || (resource.data.active == true && resource.data.expiresAt > request.time);
+      allow create, update, delete: if isAdmin();
     }
 
     match /{document=**} {
