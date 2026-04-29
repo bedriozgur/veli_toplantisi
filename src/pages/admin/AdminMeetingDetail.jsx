@@ -4,15 +4,11 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useLanguage } from "../../contexts/LanguageContext";
 import {
   createClass,
-  createRoom,
   deleteClass,
-  deleteRoom,
   getClasses,
   getMeeting,
-  getRooms,
   updateClassTeachers,
   updateMeeting,
-  updateRoom,
 } from "../../services/meetingService";
 import {
   CLASS_ROSTER_TEMPLATE_CSV,
@@ -30,14 +26,12 @@ export default function AdminMeetingDetail() {
   const classFileRef = useRef(null);
   const [meeting, setMeeting] = useState(null);
   const [classes, setClasses] = useState([]);
-  const [rooms, setRooms] = useState([]);
   const [teacherCatalog, setTeacherCatalog] = useState([]);
   const [activeTab, setActiveTab] = useState("settings");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [meetingDraft, setMeetingDraft] = useState({ title: "", date: "", status: "draft" });
-  const [roomDraft, setRoomDraft] = useState({ name: "", floor: "" });
 
   useEffect(() => {
     refresh();
@@ -47,10 +41,9 @@ export default function AdminMeetingDetail() {
   async function refresh() {
     try {
       setError("");
-      const [meetingData, classData, roomData] = await Promise.all([
+      const [meetingData, classData] = await Promise.all([
         getMeeting(meetingId),
         getClasses(meetingId),
-        getRooms(meetingId),
       ]);
       setMeeting(meetingData);
       setMeetingDraft({
@@ -59,12 +52,10 @@ export default function AdminMeetingDetail() {
         status: meetingData?.status || "draft",
       });
       setClasses(classData);
-      setRooms(roomData);
       setTeacherCatalog((previous) => buildTeacherCatalog(classData, previous));
     } catch {
       setMeeting(null);
       setClasses([]);
-      setRooms([]);
       setTeacherCatalog([]);
       setError(t("admin.detailNoMeeting"));
     }
@@ -188,54 +179,6 @@ export default function AdminMeetingDetail() {
         await updateClassTeachers(meetingId, classItem.id, assignedTeachers);
       }
       setMessage(t("admin.detailTeachersSavedAll"));
-      await refresh();
-    } catch (err) {
-      setError(err?.message || t("app.error"));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function addRoom() {
-    const name = String(roomDraft.name || "").trim();
-    if (!name) return;
-    setBusy("room");
-    setMessage("");
-    setError("");
-    try {
-      await createRoom(meetingId, { name, floor: roomDraft.floor || "" });
-      setRoomDraft({ name: "", floor: "" });
-      setMessage(t("admin.detailRoomAdded").replace("{name}", name));
-      await refresh();
-    } catch (err) {
-      setError(err?.message || t("app.error"));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function saveRoom(room) {
-    setBusy("room");
-    setMessage("");
-    setError("");
-    try {
-      await updateRoom(meetingId, room.id, room);
-      setMessage(t("admin.detailRoomSaved").replace("{name}", room.name || t("admin.detailRoomName")));
-      await refresh();
-    } catch (err) {
-      setError(err?.message || t("app.error"));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function removeRoom(roomId) {
-    setBusy("room");
-    setMessage("");
-    setError("");
-    try {
-      await deleteRoom(meetingId, roomId);
-      setMessage(t("admin.detailRoomDeleted"));
       await refresh();
     } catch (err) {
       setError(err?.message || t("app.error"));
@@ -408,64 +351,6 @@ export default function AdminMeetingDetail() {
               })}
             </div>
           </div>
-
-          <details style={styles.disclosure}>
-            <summary style={styles.disclosureSummary}>
-              <div>
-                <h3 style={styles.subcardTitle}>{t("admin.detailRoomSection")}</h3>
-                <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
-              </div>
-              <span style={styles.disclosureHint}>{t("admin.detailClickToEdit")}</span>
-            </summary>
-            <div style={styles.disclosureBody}>
-              <div style={styles.roomAddRow}>
-                <input
-                  value={roomDraft.name}
-                  onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
-                  placeholder={t("admin.detailRoomName")}
-                  style={styles.input}
-                />
-                <input
-                  value={roomDraft.floor}
-                  onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
-                  placeholder={t("admin.detailFloor")}
-                  style={styles.input}
-                />
-                <button type="button" onClick={addRoom} style={styles.primaryButtonSmall} disabled={busy === "room"}>
-                  {t("admin.detailAddRoom")}
-                </button>
-              </div>
-              <div style={styles.roomList}>
-                {rooms.map((room) => (
-                  <div key={room.id} style={styles.roomItem}>
-                    <input
-                      value={room.name || ""}
-                      onChange={(event) =>
-                        setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, name: event.target.value })))
-                      }
-                      placeholder={t("admin.detailRoomName")}
-                      style={styles.input}
-                    />
-                    <input
-                      value={room.floor || ""}
-                      onChange={(event) =>
-                        setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, floor: event.target.value })))
-                      }
-                      placeholder={t("admin.detailFloor")}
-                      style={styles.input}
-                    />
-                    <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
-                      {t("admin.detailSaveRoom")}
-                    </button>
-                    <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
-                      {t("admin.detailDeleteRoom")}
-                    </button>
-                  </div>
-                ))}
-                {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
-              </div>
-            </div>
-          </details>
 
           <div style={styles.toolbar}>
             <button
@@ -820,17 +705,6 @@ const styles = {
     paddingTop: 8,
     borderTop: "1px solid #e5e7eb",
   },
-  subcard: {
-    display: "grid",
-    gap: 12,
-    padding: 16,
-    borderRadius: 18,
-    background: "#f9fafb",
-  },
-  subcardTitle: {
-    margin: 0,
-    fontSize: 18,
-  },
   disclosure: {
     display: "grid",
     gap: 0,
@@ -1061,24 +935,6 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
     gap: 8,
-  },
-  roomAddRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
-    gap: 10,
-    alignItems: "center",
-  },
-  roomList: {
-    display: "grid",
-    gap: 10,
-  },
-  roomItem: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto auto",
-    gap: 10,
-    alignItems: "center",
-    paddingTop: 10,
-    borderTop: "1px solid #f1f5f9",
   },
   linkButton: {
     border: "none",
