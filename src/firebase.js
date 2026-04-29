@@ -19,13 +19,20 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
+const PUBLIC_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAh_NW992P4NEq6k8PUwBnNm7FdUa3JPTs",
+  authDomain: "veli-toplantisi.firebaseapp.com",
+  projectId: "veli-toplantisi",
+  appId: "1:654002086861:web:6d1c82d5e4495e04971a84",
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || PUBLIC_FIREBASE_CONFIG.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || PUBLIC_FIREBASE_CONFIG.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || PUBLIC_FIREBASE_CONFIG.projectId,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || PUBLIC_FIREBASE_CONFIG.appId,
 };
 
 function hasRequiredConfig() {
