@@ -5,8 +5,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { auth, db, doc, getDoc, isFirebaseConfigured, setDemoStoreForced } from "../firebase";
+import { auth, db, doc, getDoc, isDemoStoreForced, isFirebaseConfigured, setDemoStoreForced } from "../firebase";
 import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/demoSeed";
+import { syncDemoStoreToFirestore } from "../services/meetingService";
 import { setDoc } from "firebase/firestore";
 
 const AuthContext = createContext(null);
@@ -97,6 +98,7 @@ export function AuthProvider({ children }) {
       setUserProfile(existing);
       setUserRole(existing?.role || null);
       setAuthLoading(false);
+      syncDemoStoreToFirestore().catch(() => {});
       return undefined;
     }
 
@@ -111,6 +113,12 @@ export function AuthProvider({ children }) {
       setAuthLoading(false);
     });
   }, [fetchUserProfile]);
+
+  useEffect(() => {
+    if (!authLoading && currentUser && isDemoStoreForced()) {
+      syncDemoStoreToFirestore().catch(() => {});
+    }
+  }, [authLoading, currentUser]);
 
   const login = useCallback(async (email, password) => {
     if (!isFirebaseConfigured || !auth) {
@@ -142,6 +150,7 @@ export function AuthProvider({ children }) {
           { merge: true }
         );
       }
+      syncDemoStoreToFirestore().catch(() => {});
       return credential;
     }
     setDemoStoreForced(false);
@@ -162,6 +171,7 @@ export function AuthProvider({ children }) {
     setCurrentUser(demo);
     setUserProfile(demo);
     setUserRole(normalizedRole);
+    syncDemoStoreToFirestore().catch(() => {});
   }, []);
 
   const logout = useCallback(async () => {

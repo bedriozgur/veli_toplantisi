@@ -39,6 +39,7 @@ const TURKISH_SUBJECTS = [
 const TURKISH_CLASSES = buildClassList();
 const TURKISH_MEETING_TITLE = "Demo Veli Toplantisi";
 const TURKISH_MEETING_DATE = "2026-05-15";
+let demoSyncTimer = null;
 
 function ensureDb() {
   if (!db) {
@@ -49,6 +50,17 @@ function ensureDb() {
 
 function hasFirestore() {
   return Boolean(db) && !isDemoStoreForced();
+}
+
+function scheduleDemoStoreSync() {
+  if (!db || !isDemoStoreForced()) return;
+  if (demoSyncTimer) {
+    clearTimeout(demoSyncTimer);
+  }
+  demoSyncTimer = setTimeout(() => {
+    demoSyncTimer = null;
+    syncDemoStoreToFirestore().catch(() => {});
+  }, 350);
 }
 
 function clone(value) {
@@ -115,7 +127,76 @@ function updateDemoStore(updater) {
   const current = readDemoStore();
   const next = updater(clone(current)) || current;
   writeDemoStore(next);
+  scheduleDemoStoreSync();
   return next;
+}
+
+export async function syncDemoStoreToFirestore() {
+  if (!db || !isDemoStoreForced()) return;
+
+  const store = readDemoStore();
+  const ops = [];
+  const pushSet = (ref, data) => {
+    ops.push((batch) => batch.set(ref, data, { merge: true }));
+  };
+
+  for (const user of store.users || []) {
+    const uid = user.uid || user.id;
+    if (!uid) continue;
+    pushSet(doc(ensureDb(), "users", uid), {
+      uid,
+      email: user.email || "",
+      displayName: user.displayName || "",
+      role: user.role || "frontdesk",
+      temp: Boolean(user.temp),
+      createdAt: user.createdAt || nowIso(),
+      updatedAt: nowIso(),
+    });
+  }
+
+  for (const meeting of store.meetings || []) {
+    pushSet(doc(ensureDb(), "meetings", meeting.id), {
+      ...meeting,
+      updatedAt: meeting.updatedAt || nowIso(),
+    });
+
+    for (const room of store.roomsByMeeting?.[meeting.id] || []) {
+      pushSet(doc(ensureDb(), "meetings", meeting.id, "rooms", room.id), {
+        ...room,
+        updatedAt: room.updatedAt || nowIso(),
+      });
+    }
+
+    for (const classItem of store.classesByMeeting?.[meeting.id] || []) {
+      pushSet(doc(ensureDb(), "meetings", meeting.id, "classes", classItem.id), {
+        ...classItem,
+        updatedAt: classItem.updatedAt || nowIso(),
+      });
+
+      for (const student of store.studentsByMeeting?.[meeting.id]?.[classItem.id] || []) {
+        pushSet(doc(ensureDb(), "meetings", meeting.id, "classes", classItem.id, "students", student.id), {
+          ...student,
+          updatedAt: student.updatedAt || nowIso(),
+        });
+      }
+    }
+  }
+
+  for (const [code, accessCode] of Object.entries(store.accessCodes || {})) {
+    pushSet(doc(ensureDb(), "accessCodes", code), {
+      ...accessCode,
+      updatedAt: accessCode.updatedAt || nowIso(),
+    });
+  }
+
+  if (!ops.length) return;
+
+  const MAX_OPS = 450;
+  for (let index = 0; index < ops.length; index += MAX_OPS) {
+    const batch = writeBatch(ensureDb());
+    ops.slice(index, index + MAX_OPS).forEach((op) => op(batch));
+    await batch.commit();
+  }
 }
 
 export function hasDemoData() {
