@@ -7,6 +7,18 @@ export const TEACHER_TEMPLATE_CSV = [
   "Tulin Temel,Turkce,9/B,Lise 1. Kat,,unavailable,Izinli",
 ].join("\n");
 
+export const CLASS_ROSTER_TEMPLATE_CSV = [
+  "class,teacher_name,subject,meeting_location,floor,time,status,note",
+  "5A,Deniz Sert,Ingilizce,LHZ/A,Lise 1. Kat,18:00,active,",
+  "5A,Hande Hatipoglu,Matematik,101,Lise 1. Kat,18:15,active,",
+].join("\n");
+
+export const STUDENT_ROSTER_TEMPLATE_CSV = [
+  "class,student_name,parent_name,parent_phone,note",
+  "5A,Ali Yilmaz,Ayse Yilmaz,555 111 22 33,",
+  "5A,Zeynep Kaya,Mehmet Kaya,555 444 55 66,",
+].join("\n");
+
 export const CLASS_TEMPLATE_CSV = [
   "name,teachers",
   '9/A,"Deniz Sert; Hande Hatipoglu"',
@@ -81,4 +93,89 @@ export function importStudentsFromCsv(text, classes) {
       };
     })
     .filter((student) => student.child);
+}
+
+function pickRowValue(row, keys) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return "";
+}
+
+function makeStableId(value, fallback = "item") {
+  const normalized = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+}
+
+export function parseClassRosterCsv(text) {
+  return parseCsv(text)
+    .map((row) => {
+      const className = pickRowValue(row, ["class", "class_name", "classroom", "name"]);
+      return {
+        className,
+        teacherName: pickRowValue(row, ["teacher_name", "teacher", "name"]),
+        subject: pickRowValue(row, ["subject", "lesson", "branch"]),
+        room: pickRowValue(row, ["meeting_location", "room", "location"]),
+        floor: pickRowValue(row, ["floor", "level"]),
+        time: pickRowValue(row, ["time", "hour"]),
+        status: pickRowValue(row, ["status"]) || "active",
+        note: pickRowValue(row, ["note", "notes"]),
+      };
+    })
+    .filter((row) => row.className && row.teacherName);
+}
+
+export function buildClassRosterPayload(rows) {
+  const grouped = new Map();
+
+  rows.forEach((row, index) => {
+    const classKey = String(row.className || "").trim();
+    if (!classKey) return;
+
+    if (!grouped.has(classKey)) {
+      grouped.set(classKey, {
+        id: classKey.replace(/\s+/g, "").toUpperCase(),
+        className: classKey,
+        teachers: [],
+      });
+    }
+
+    const classItem = grouped.get(classKey);
+    const teacherIdBase = makeStableId(`${row.teacherName}-${row.subject || ""}-${index + 1}`, `teacher-${index + 1}`);
+    const teacherId = classItem.teachers.some((teacher) => teacher.id === teacherIdBase)
+      ? `${teacherIdBase}-${classItem.teachers.length + 1}`
+      : teacherIdBase;
+
+    classItem.teachers.push({
+      id: teacherId,
+      name: row.teacherName,
+      subject: row.subject,
+      room: row.room,
+      floor: row.floor,
+      time: row.time,
+      status: String(row.status || "active").toLowerCase() === "unavailable" ? "unavailable" : "active",
+      note: row.note,
+      order: classItem.teachers.length + 1,
+    });
+  });
+
+  return Array.from(grouped.values());
+}
+
+export function parseStudentRosterCsv(text) {
+  return parseCsv(text)
+    .map((row) => ({
+      className: pickRowValue(row, ["class", "class_name", "classroom"]),
+      studentName: pickRowValue(row, ["student_name", "student", "child", "name"]),
+      parentName: pickRowValue(row, ["parent_name", "parent", "guardian", "veli"]),
+      parentPhone: pickRowValue(row, ["parent_phone", "phone", "phone_number", "telefon"]),
+      note: pickRowValue(row, ["note", "notes"]),
+    }))
+    .filter((row) => row.className && row.studentName);
 }

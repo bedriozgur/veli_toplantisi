@@ -1,15 +1,13 @@
 # Parent Evening App
 
-A lightweight React/Vite app for school parent-teacher meetings.
+A React/Vite app for school parent-teacher meetings with Firebase Auth and Firestore.
 
 ## What it does
-- Manage teachers, classes, and students
-- Assign teachers to classes
-- Generate a QR code per student
-- Parent view shows only that student's teachers
-- Parent can tick completed meetings and write notes
-- Parent can email their notes at the end
-- Admin data persists in the browser via localStorage
+- Staff sign in with Firebase Auth
+- Admins create meetings and load class/student CSVs from the meeting detail screen
+- Front desk searches students and marks arrivals
+- Parents enter a code and view only their class meeting plan
+- Parent notes are exported through the user’s own mail client with `mailto:`
 
 ## Local run
 ```bash
@@ -23,15 +21,21 @@ npm install
 npm run build
 ```
 
-## Deploy to Vercel
-1. Push this folder to a GitHub repository.
-2. In Vercel, create a New Project and import that repo.
-3. Framework preset: Vite
-4. Build command: `npm run build`
-5. Output directory: `dist`
-6. Deploy
+## Firebase
+Set these environment variables for cloud mode:
 
-Vercel will auto-detect Vite in most cases.
+```bash
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_APP_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+```
 
-## Important current limitation
-This version stores admin-side data only in the browser that created it. If you want multi-device admin access or server-side persistence, add a backend later (Firebase, Supabase, etc.).
+## CSV imports
+The admin meeting detail screen supports:
+- Class roster CSV import
+- Student CSV import with parent name and parent phone columns
+
+Templates are included in the UI.
