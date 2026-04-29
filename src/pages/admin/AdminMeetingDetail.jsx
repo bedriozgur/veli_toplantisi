@@ -5,35 +5,38 @@ import { useLanguage } from "../../contexts/LanguageContext";
 import {
   createClass,
   createRoom,
+  deleteClass,
   deleteRoom,
   getClasses,
   getMeeting,
   getRooms,
-  replaceStudents,
   updateClassTeachers,
+  updateMeeting,
   updateRoom,
 } from "../../services/meetingService";
 import {
   CLASS_ROSTER_TEMPLATE_CSV,
-  STUDENT_ROSTER_TEMPLATE_CSV,
   buildClassRosterPayload,
   downloadTextFile,
   parseClassRosterCsv,
-  parseStudentRosterCsv,
 } from "../../utils/importData";
+
+const CLASS_OPTIONS = buildClassOptions();
 
 export default function AdminMeetingDetail() {
   const { meetingId } = useParams();
   const { currentUser } = useAuth();
   const { t } = useLanguage();
   const classFileRef = useRef(null);
-  const studentFileRef = useRef(null);
   const [meeting, setMeeting] = useState(null);
   const [classes, setClasses] = useState([]);
   const [rooms, setRooms] = useState([]);
+  const [teacherCatalog, setTeacherCatalog] = useState([]);
+  const [activeTab, setActiveTab] = useState("settings");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [meetingDraft, setMeetingDraft] = useState({ title: "", date: "", status: "draft" });
   const [roomDraft, setRoomDraft] = useState({ name: "", floor: "" });
 
   useEffect(() => {
@@ -50,13 +53,40 @@ export default function AdminMeetingDetail() {
         getRooms(meetingId),
       ]);
       setMeeting(meetingData);
+      setMeetingDraft({
+        title: meetingData?.title || "",
+        date: meetingData?.date || "",
+        status: meetingData?.status || "draft",
+      });
       setClasses(classData);
       setRooms(roomData);
+      setTeacherCatalog((previous) => buildTeacherCatalog(classData, previous));
     } catch {
       setMeeting(null);
       setClasses([]);
       setRooms([]);
+      setTeacherCatalog([]);
       setError(t("admin.detailNoMeeting"));
+    }
+  }
+
+  async function saveMeeting() {
+    setBusy("meeting");
+    setMessage("");
+    setError("");
+    try {
+      await updateMeeting(meetingId, {
+        title: meetingDraft.title,
+        date: meetingDraft.date,
+        status: meetingDraft.status,
+        grades: classes.map((classItem) => classItem.classLabel || classItem.id),
+      });
+      setMessage(t("admin.detailMeetingSaved"));
+      await refresh();
+    } catch (err) {
+      setError(err?.message || t("app.error"));
+    } finally {
+      setBusy("");
     }
   }
 
@@ -77,7 +107,6 @@ export default function AdminMeetingDetail() {
         return;
       }
 
-      const meetingDate = meeting?.date || "";
       for (const classItem of roster) {
         const { grade, branch } = splitClassName(classItem.className);
         await createClass(
@@ -88,10 +117,7 @@ export default function AdminMeetingDetail() {
             classLabel: classItem.className,
             teachers: classItem.teachers,
           },
-          {
-            title: meeting?.title || "",
-            date: meetingDate,
-          }
+          meeting
         );
       }
 
@@ -105,168 +131,170 @@ export default function AdminMeetingDetail() {
     }
   }
 
-  async function handleStudentUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  function classIsSelected(className) {
+    const normalized = normalizeClassName(className);
+    return classes.some((classItem) => normalizeClassName(classItem.classLabel || classItem.id) === normalized);
+  }
 
-    setBusy("student");
+  async function toggleClassSelection(className) {
+    setMessage("");
+    setError("");
+    const normalized = normalizeClassName(className);
+    const existing = classes.find((classItem) => normalizeClassName(classItem.classLabel || classItem.id) === normalized);
+
+    try {
+      if (existing) {
+        await deleteClass(meetingId, existing.id);
+        setMessage(t("admin.detailClassRemoved").replace("{className}", existing.classLabel || existing.id));
+      } else {
+        const { grade, branch } = splitClassName(className);
+        await createClass(
+          meetingId,
+          {
+            grade,
+            branch,
+            classLabel: className,
+            teachers: [],
+          },
+          meeting
+        );
+        setMessage(t("admin.detailClassAdded").replace("{className}", className));
+      }
+      await refresh();
+    } catch (err) {
+      setError(err?.message || t("app.error"));
+    }
+  }
+
+  async function saveTeacherAssignments() {
+    setBusy("teachers");
     setMessage("");
     setError("");
     try {
-      const text = await file.text();
-      const parsed = parseStudentRosterCsv(text);
-
-      if (!parsed.length) {
-        setMessage(t("admin.detailCsvStudentEmpty"));
-        return;
+      for (const classItem of classes) {
+        const assignedTeachers = teacherCatalog
+          .filter((teacher) => (teacher.classIds || []).includes(classItem.id))
+          .map((teacher, index) => ({
+            id: teacher.id,
+            name: teacher.name || "",
+            subject: teacher.subject || "",
+            room: teacher.room || "",
+            floor: teacher.floor || "",
+            time: teacher.time || "",
+            status: teacher.status || "active",
+            note: teacher.note || "",
+            order: teacher.order || index + 1,
+          }));
+        await updateClassTeachers(meetingId, classItem.id, assignedTeachers);
       }
-
-      const classLookup = new Map(
-        classes.map((classItem) => [normalizeClassName(classItem.classLabel || classItem.id), classItem])
-      );
-      const groups = new Map();
-      parsed.forEach((row) => {
-        const key = normalizeClassName(row.className);
-        if (!key) return;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(row);
-      });
-
-      let imported = 0;
-      let skipped = 0;
-
-      for (const [key, students] of groups.entries()) {
-        const classItem = classLookup.get(key);
-        if (!classItem) {
-          skipped += students.length;
-          continue;
-        }
-
-        await replaceStudents(
-          meetingId,
-          classItem.id,
-          students.map((student) => ({
-            studentName: student.studentName,
-            parentName: student.parentName,
-            parentPhone: student.parentPhone,
-            note: student.note,
-          })),
-          classItem.teachers || []
-        );
-        imported += students.length;
-      }
-
-      setMessage(
-        skipped > 0
-          ? t("admin.detailStudentImportedSkipped")
-              .replace("{imported}", String(imported))
-              .replace("{skipped}", String(skipped))
-          : t("admin.detailStudentImported").replace("{count}", String(imported))
-      );
+      setMessage(t("admin.detailTeachersSavedAll"));
       await refresh();
     } catch (err) {
       setError(err?.message || t("app.error"));
     } finally {
       setBusy("");
-      event.target.value = "";
     }
-  }
-
-  function updateClassTeacherField(classId, teacherId, field, value) {
-    setClasses((previous) =>
-      previous.map((classItem) => {
-        if (classItem.id !== classId) return classItem;
-        return {
-          ...classItem,
-          teachers: (classItem.teachers || []).map((teacher) =>
-            teacher.id !== teacherId ? teacher : { ...teacher, [field]: value }
-          ),
-        };
-      })
-    );
-  }
-
-  function updateRoomField(roomId, field, value) {
-    setRooms((previous) =>
-      previous.map((room) => (room.id !== roomId ? room : { ...room, [field]: value }))
-    );
-  }
-
-  async function saveRoom(room) {
-    await updateRoom(meetingId, room.id, room);
-    setMessage(t("admin.detailRoomSaved").replace("{name}", room.name || t("admin.detailRoomName")));
-    await refresh();
   }
 
   async function addRoom() {
     const name = String(roomDraft.name || "").trim();
     if (!name) return;
-    await createRoom(meetingId, { name, floor: roomDraft.floor || "" });
-    setRoomDraft({ name: "", floor: "" });
-    setMessage(t("admin.detailRoomAdded").replace("{name}", name));
-    await refresh();
+    setBusy("room");
+    setMessage("");
+    setError("");
+    try {
+      await createRoom(meetingId, { name, floor: roomDraft.floor || "" });
+      setRoomDraft({ name: "", floor: "" });
+      setMessage(t("admin.detailRoomAdded").replace("{name}", name));
+      await refresh();
+    } catch (err) {
+      setError(err?.message || t("app.error"));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveRoom(room) {
+    setBusy("room");
+    setMessage("");
+    setError("");
+    try {
+      await updateRoom(meetingId, room.id, room);
+      setMessage(t("admin.detailRoomSaved").replace("{name}", room.name || t("admin.detailRoomName")));
+      await refresh();
+    } catch (err) {
+      setError(err?.message || t("app.error"));
+    } finally {
+      setBusy("");
+    }
   }
 
   async function removeRoom(roomId) {
-    await deleteRoom(meetingId, roomId);
-    setMessage(t("admin.detailRoomDeleted"));
-    await refresh();
+    setBusy("room");
+    setMessage("");
+    setError("");
+    try {
+      await deleteRoom(meetingId, roomId);
+      setMessage(t("admin.detailRoomDeleted"));
+      await refresh();
+    } catch (err) {
+      setError(err?.message || t("app.error"));
+    } finally {
+      setBusy("");
+    }
   }
 
-  function addTeacherRow(classId) {
-    setClasses((previous) =>
-      previous.map((classItem) => {
-        if (classItem.id !== classId) return classItem;
-        const nextTeachers = Array.isArray(classItem.teachers) ? classItem.teachers : [];
-        return {
-          ...classItem,
-          teachers: [
-            ...nextTeachers,
-            {
-              id: `teacher-${Date.now().toString(36)}`,
-              name: "",
-              subject: "",
-              room: "",
-              floor: "",
-              time: "",
-              status: "active",
-              note: "",
-              order: nextTeachers.length + 1,
-            },
-          ],
-        };
+  function addTeacher() {
+    setTeacherCatalog((previous) => [
+      ...previous,
+      {
+        id: `teacher-${Date.now().toString(36)}`,
+        name: "",
+        subject: "",
+        room: "",
+        floor: "",
+        time: "",
+        status: "active",
+        note: "",
+        order: previous.length + 1,
+        classIds: [],
+      },
+    ]);
+  }
+
+  function updateTeacherField(teacherId, field, value) {
+    setTeacherCatalog((previous) =>
+      previous.map((teacher) => (teacher.id !== teacherId ? teacher : { ...teacher, [field]: value }))
+    );
+  }
+
+  function toggleTeacherClass(teacherId, classId) {
+    setTeacherCatalog((previous) =>
+      previous.map((teacher) => {
+        if (teacher.id !== teacherId) return teacher;
+        const classIds = new Set(teacher.classIds || []);
+        if (classIds.has(classId)) classIds.delete(classId);
+        else classIds.add(classId);
+        return { ...teacher, classIds: Array.from(classIds) };
       })
     );
   }
 
-  function removeTeacherRow(classId, teacherId) {
-    setClasses((previous) =>
-      previous.map((classItem) => {
-        if (classItem.id !== classId) return classItem;
-        const nextTeachers = (classItem.teachers || [])
-          .filter((teacher) => teacher.id !== teacherId)
-          .map((teacher, index) => ({ ...teacher, order: index + 1 }));
-        return { ...classItem, teachers: nextTeachers };
-      })
-    );
+  function removeTeacher(teacherId) {
+    setTeacherCatalog((previous) => previous.filter((teacher) => teacher.id !== teacherId));
   }
 
-  async function saveClassTeachers(classItem) {
-    await updateClassTeachers(meetingId, classItem.id, classItem.teachers || []);
-    setMessage(t("admin.detailTeachersSaved").replace("{className}", classItem.classLabel || classItem.id));
-    await refresh();
-  }
-
-  const classesById = useMemo(() => new Map(classes.map((classItem) => [classItem.id, classItem])), [classes]);
-
-  const classStats = useMemo(
-    () =>
-      classes.map((classItem) => ({
-        ...classItem,
-        studentCount: Number(classItem?.stats?.totalStudents || 0),
-      })),
-    [classes]
-  );
+  const teacherList = useMemo(() => buildTeacherCatalog(classes, teacherCatalog), [classes, teacherCatalog]);
+  const teachersByClass = useMemo(() => {
+    const map = new Map();
+    for (const classItem of classes) {
+      map.set(
+        classItem.id,
+        teacherList.filter((teacher) => (teacher.classIds || []).includes(classItem.id))
+      );
+    }
+    return map;
+  }, [classes, teacherList]);
 
   if (!meeting) {
     return <div style={styles.card}>{error || t("admin.detailLoading")}</div>;
@@ -277,9 +305,10 @@ export default function AdminMeetingDetail() {
       <section style={styles.hero}>
         <div>
           <div style={styles.badge}>{t("admin.detailBadge")}</div>
-          <h2 style={styles.title}>{meeting.title}</h2>
+          <h2 style={styles.title}>{meetingDraft.title || meeting.title}</h2>
           <p style={styles.text}>
-            {meeting.date || t("admin.detailDateMissing")} · {meeting.status || "draft"} · {classStats.length} {t("admin.detailClassCount")}
+            {meetingDraft.date || meeting.date || t("admin.detailDateMissing")} · {meetingDraft.status || meeting.status || "draft"} ·{" "}
+            {classes.length} {t("admin.detailClassCount")}
           </p>
         </div>
 
@@ -290,206 +319,350 @@ export default function AdminMeetingDetail() {
           </div>
           <div style={styles.metaCard}>
             <span style={styles.metaLabel}>{t("admin.detailClassCount")}</span>
-            <strong>{classStats.length}</strong>
+            <strong>{classes.length}</strong>
           </div>
         </div>
       </section>
 
-      <section style={styles.toolbar}>
-        <button onClick={() => downloadTextFile("class-roster-template.csv", CLASS_ROSTER_TEMPLATE_CSV, "text/csv;charset=utf-8;")} style={styles.secondaryButton}>
-          {t("admin.detailClassCsv")}
+      <div style={styles.tabs}>
+        <button type="button" onClick={() => setActiveTab("settings")} style={tabStyle(activeTab === "settings")}>
+          {t("admin.detailTabsSettings")}
         </button>
-        <button onClick={() => classFileRef.current?.click()} style={styles.primaryButton} disabled={busy === "class"}>
-          {busy === "class" ? t("admin.detailUploadingClass") : t("admin.detailUploadClass")}
+        <button type="button" onClick={() => setActiveTab("classes")} style={tabStyle(activeTab === "classes")}>
+          {t("admin.detailTabsClasses")}
         </button>
-        <button onClick={() => downloadTextFile("student-roster-template.csv", STUDENT_ROSTER_TEMPLATE_CSV, "text/csv;charset=utf-8;")} style={styles.secondaryButton}>
-          {t("admin.detailStudentCsv")}
+        <button type="button" onClick={() => setActiveTab("teachers")} style={tabStyle(activeTab === "teachers")}>
+          {t("admin.detailTabsTeachers")}
         </button>
-        <button onClick={() => studentFileRef.current?.click()} style={styles.primaryButton} disabled={busy === "student"}>
-          {busy === "student" ? t("admin.detailUploadingStudent") : t("admin.detailUploadStudent")}
-        </button>
-      </section>
-
-      <input ref={classFileRef} type="file" accept=".csv,text/csv" onChange={handleClassRosterUpload} style={styles.hiddenInput} />
-      <input ref={studentFileRef} type="file" accept=".csv,text/csv" onChange={handleStudentUpload} style={styles.hiddenInput} />
+      </div>
 
       {message ? <div style={styles.notice}>{message}</div> : null}
       {error ? <div style={styles.error}>{error}</div> : null}
 
-      <section style={styles.roomCard}>
-        <div style={styles.roomHead}>
-          <div>
-            <h3 style={styles.cardTitle}>{t("admin.detailRoomSection")}</h3>
-            <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
-          </div>
-          <div style={styles.roomAddRow}>
-            <input
-              value={roomDraft.name}
-              onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder={t("admin.detailRoomName")}
-              style={styles.teacherInput}
-            />
-            <input
-              value={roomDraft.floor}
-              onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
-              placeholder={t("admin.detailFloor")}
-              style={styles.teacherInput}
-            />
-            <button type="button" onClick={addRoom} style={styles.primaryButtonSmall}>
-              {t("admin.detailAddRoom")}
+      {activeTab === "settings" ? (
+        <section style={styles.card}>
+          <div style={styles.sectionHead}>
+            <div>
+              <h3 style={styles.cardTitle}>{t("admin.detailSettingsTitle")}</h3>
+              <p style={styles.cardText}>{t("admin.detailSettingsHelp")}</p>
+            </div>
+            <button type="button" onClick={saveMeeting} style={styles.primaryButtonSmall} disabled={busy === "meeting"}>
+              {busy === "meeting" ? t("admin.creating") : t("admin.detailSaveMeeting")}
             </button>
           </div>
-        </div>
-        <div style={styles.roomList}>
-          {rooms.map((room) => (
-            <div key={room.id} style={styles.roomItem}>
+
+          <div style={styles.fieldGrid}>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>{t("admin.meetingTitle")}</span>
               <input
-                value={room.name || ""}
-                onChange={(event) => updateRoomField(room.id, "name", event.target.value)}
+                value={meetingDraft.title}
+                onChange={(event) => setMeetingDraft((prev) => ({ ...prev, title: event.target.value }))}
+                style={styles.input}
+              />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>{t("admin.meetingDate")}</span>
+              <input
+                type="date"
+                value={meetingDraft.date}
+                onChange={(event) => setMeetingDraft((prev) => ({ ...prev, date: event.target.value }))}
+                style={styles.input}
+              />
+            </label>
+            <label style={styles.field}>
+              <span style={styles.fieldLabel}>{t("admin.detailStatus")}</span>
+              <select
+                value={meetingDraft.status}
+                onChange={(event) => setMeetingDraft((prev) => ({ ...prev, status: event.target.value }))}
+                style={styles.input}
+              >
+                <option value="draft">draft</option>
+                <option value="active">active</option>
+                <option value="closed">closed</option>
+              </select>
+            </label>
+          </div>
+
+          <div>
+            <p style={styles.selectionLabel}>{t("admin.detailSelectedClasses")}</p>
+            <div style={styles.chipGrid}>
+              {CLASS_OPTIONS.map((className) => {
+                const active = classIsSelected(className);
+                return (
+                  <button
+                    key={className}
+                    type="button"
+                    onClick={() => toggleClassSelection(className)}
+                    style={{
+                      ...styles.classChip,
+                      ...(active ? styles.classChipActive : null),
+                    }}
+                  >
+                    {className}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={styles.sectionDivider}>
+            <div>
+              <h3 style={styles.cardTitle}>{t("admin.detailRoomSection")}</h3>
+              <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
+            </div>
+            <div style={styles.roomAddRow}>
+              <input
+                value={roomDraft.name}
+                onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder={t("admin.detailRoomName")}
-                style={styles.teacherInput}
+                style={styles.input}
               />
               <input
-                value={room.floor || ""}
-                onChange={(event) => updateRoomField(room.id, "floor", event.target.value)}
+                value={roomDraft.floor}
+                onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
                 placeholder={t("admin.detailFloor")}
-                style={styles.teacherInput}
+                style={styles.input}
               />
-              <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
-                {t("admin.detailSaveRoom")}
-              </button>
-              <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
-                {t("admin.detailDeleteRoom")}
+              <button type="button" onClick={addRoom} style={styles.primaryButtonSmall} disabled={busy === "room"}>
+                {t("admin.detailAddRoom")}
               </button>
             </div>
-          ))}
-          {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
-        </div>
-      </section>
+          </div>
 
-      <section style={styles.grid}>
-        {classStats.map((classItem) => (
-          <article key={classItem.id} style={styles.card}>
-            <div style={styles.cardHead}>
-              <div>
-                <h3 style={styles.cardTitle}>{classItem.classLabel || classItem.id}</h3>
-                <p style={styles.cardText}>
-                  {t("admin.detailClassCode")}: <strong>{classItem.accessCode || t("admin.detailNone")}</strong>
-                </p>
+          <div style={styles.roomList}>
+            {rooms.map((room) => (
+              <div key={room.id} style={styles.roomItem}>
+                <input
+                  value={room.name || ""}
+                  onChange={(event) => setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, name: event.target.value })))}
+                  placeholder={t("admin.detailRoomName")}
+                  style={styles.input}
+                />
+                <input
+                  value={room.floor || ""}
+                  onChange={(event) => setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, floor: event.target.value })))}
+                  placeholder={t("admin.detailFloor")}
+                  style={styles.input}
+                />
+                <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
+                  {t("admin.detailSaveRoom")}
+                </button>
+                <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
+                  {t("admin.detailDeleteRoom")}
+                </button>
               </div>
-              <span style={styles.pill}>{classItem.studentCount} {t("admin.detailStudentList")}</span>
-            </div>
+            ))}
+            {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
+          </div>
 
-            <div style={styles.teacherList}>
-              {(classItem.teachers || []).map((teacher) => (
-                <div key={teacher.id} style={styles.teacherEditor}>
-                  <div style={styles.teacherGrid}>
-                    <input
-                      value={teacher.name || ""}
-                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "name", event.target.value)}
-                      placeholder={t("admin.detailTeacherName")}
-                      style={styles.teacherInput}
-                    />
-                    <input
-                      value={teacher.subject || ""}
-                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "subject", event.target.value)}
-                      placeholder={t("admin.detailTeacherSubject")}
-                      style={styles.teacherInput}
-                    />
-                    <input
-                      value={teacher.room || ""}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        const selected = rooms.find((room) => room.name === value || room.id === value);
-                        setClasses((previous) =>
-                          previous.map((item) => {
-                            if (item.id !== classItem.id) return item;
-                            return {
-                              ...item,
-                              teachers: (item.teachers || []).map((current) =>
-                                current.id !== teacher.id
-                                  ? current
-                                  : {
-                                      ...current,
-                                      room: value,
-                                      roomId: selected?.id || "",
-                                    }
-                              ),
-                            };
-                          })
-                        );
-                      }}
-                      placeholder={t("admin.detailTeacherRoom")}
-                      style={styles.teacherInput}
-                      list={`room-list-${classItem.id}`}
-                    />
-                    <datalist id={`room-list-${classItem.id}`}>
-                      {rooms.map((room) => (
-                        <option key={room.id} value={room.name}>
-                          {room.name}
-                        </option>
-                      ))}
-                    </datalist>
-                    <input
-                      value={teacher.floor || ""}
-                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "floor", event.target.value)}
-                      placeholder={t("admin.detailTeacherFloor")}
-                      style={styles.teacherInput}
-                    />
+          <div style={styles.toolbar}>
+            <button
+              onClick={() => downloadTextFile("class-roster-template.csv", CLASS_ROSTER_TEMPLATE_CSV, "text/csv;charset=utf-8;")}
+              style={styles.secondaryButton}
+              type="button"
+            >
+              {t("admin.classTemplate")}
+            </button>
+            <button onClick={() => classFileRef.current?.click()} style={styles.primaryButton} disabled={busy === "class"} type="button">
+              {busy === "class" ? t("admin.detailUploadingClass") : t("admin.classCsv")}
+            </button>
+          </div>
+
+          <input ref={classFileRef} type="file" accept=".csv,text/csv" onChange={handleClassRosterUpload} style={styles.hiddenInput} />
+        </section>
+      ) : null}
+
+      {activeTab === "classes" ? (
+        <section style={styles.card}>
+          <div style={styles.sectionHead}>
+            <div>
+              <h3 style={styles.cardTitle}>{t("admin.detailClassesTitle")}</h3>
+              <p style={styles.cardText}>{t("admin.detailClassesHelp")}</p>
+            </div>
+            <button type="button" onClick={saveTeacherAssignments} style={styles.primaryButtonSmall} disabled={busy === "teachers"}>
+              {t("admin.detailSaveTeacherPool")}
+            </button>
+          </div>
+
+          <div style={styles.grid}>
+            {classes.map((classItem) => (
+              <article key={classItem.id} style={styles.classCard}>
+                <div style={styles.cardHead}>
+                  <div>
+                    <h3 style={styles.cardTitle}>{classItem.classLabel || classItem.id}</h3>
+                    <p style={styles.cardText}>
+                      {t("admin.detailClassCode")}: <strong>{classItem.accessCode || t("admin.detailNone")}</strong>
+                    </p>
                   </div>
-                  <div style={styles.teacherActions}>
-                    <label style={styles.teacherStatus}>
-                      <input
-                        type="checkbox"
-                        checked={teacher.status !== "unavailable"}
-                        onChange={(event) =>
-                          updateClassTeacherField(
-                            classItem.id,
-                            teacher.id,
-                            "status",
-                            event.target.checked ? "active" : "unavailable"
-                          )
-                        }
-                      />
-                      {teacher.status !== "unavailable" ? t("admin.detailTeacherActive") : t("admin.detailTeacherInactive")}
-                    </label>
-                    <button type="button" onClick={() => removeTeacherRow(classItem.id, teacher.id)} style={styles.linkButton}>
-                      {t("admin.detailTeacherRemove")}
-                    </button>
+                  <span style={styles.pill}>{(teachersByClass.get(classItem.id) || []).length} {t("admin.detailTeacherLabel")}</span>
+                </div>
+
+                <div style={styles.teacherPicks}>
+                  {teacherList.length ? (
+                    teacherList.map((teacher) => {
+                      const checked = (teacher.classIds || []).includes(classItem.id);
+                      return (
+                        <label key={teacher.id} style={styles.checkRow}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTeacherClass(teacher.id, classItem.id)} />
+                          <span>
+                            {teacher.name || t("admin.detailTeacherLabel")}
+                            {teacher.subject ? ` · ${teacher.subject}` : ""}
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <p style={styles.cardText}>{t("admin.detailNoTeachersCatalog")}</p>
+                  )}
+                </div>
+
+                <div style={styles.teacherSummary}>
+                  <span>{t("admin.detailClassTeachers")}</span>
+                  <span>{(teachersByClass.get(classItem.id) || []).map((teacher) => teacher.name || t("admin.detailTeacherLabel")).join(", ") || t("admin.detailNone")}</span>
+                </div>
+              </article>
+            ))}
+            {!classes.length ? <div style={styles.card}>{t("admin.detailNoClasses")}</div> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "teachers" ? (
+        <section style={styles.card}>
+          <div style={styles.sectionHead}>
+            <div>
+              <h3 style={styles.cardTitle}>{t("admin.detailTeachersTitle")}</h3>
+              <p style={styles.cardText}>{t("admin.detailTeachersHelp")}</p>
+            </div>
+            <div style={styles.toolbar}>
+              <button type="button" onClick={addTeacher} style={styles.secondaryButtonSmall}>
+                {t("admin.detailAddTeacherPool")}
+              </button>
+              <button type="button" onClick={saveTeacherAssignments} style={styles.primaryButtonSmall} disabled={busy === "teachers"}>
+                {busy === "teachers" ? t("admin.creating") : t("admin.detailSaveTeacherPool")}
+              </button>
+            </div>
+          </div>
+
+          <div style={styles.teacherCatalog}>
+            {teacherList.map((teacher) => (
+              <article key={teacher.id} style={styles.teacherCard}>
+                <div style={styles.teacherGrid}>
+                  <input
+                    value={teacher.name || ""}
+                    onChange={(event) => updateTeacherField(teacher.id, "name", event.target.value)}
+                    placeholder={t("admin.detailTeacherName")}
+                    style={styles.input}
+                  />
+                  <input
+                    value={teacher.subject || ""}
+                    onChange={(event) => updateTeacherField(teacher.id, "subject", event.target.value)}
+                    placeholder={t("admin.detailTeacherSubject")}
+                    style={styles.input}
+                  />
+                  <input
+                    value={teacher.room || ""}
+                    onChange={(event) => updateTeacherField(teacher.id, "room", event.target.value)}
+                    placeholder={t("admin.detailTeacherRoom")}
+                    style={styles.input}
+                  />
+                  <input
+                    value={teacher.floor || ""}
+                    onChange={(event) => updateTeacherField(teacher.id, "floor", event.target.value)}
+                    placeholder={t("admin.detailTeacherFloor")}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={styles.teacherActions}>
+                  <label style={styles.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={teacher.status !== "unavailable"}
+                      onChange={(event) => updateTeacherField(teacher.id, "status", event.target.checked ? "active" : "unavailable")}
+                    />
+                    <span>{teacher.status !== "unavailable" ? t("admin.detailTeacherActive") : t("admin.detailTeacherInactive")}</span>
+                  </label>
+                  <button type="button" onClick={() => removeTeacher(teacher.id)} style={styles.linkButton}>
+                    {t("admin.detailTeacherRemove")}
+                  </button>
+                </div>
+
+                <div>
+                  <p style={styles.selectionLabel}>{t("admin.detailTeacherClassHint")}</p>
+                  <div style={styles.teacherClassGrid}>
+                    {classes.map((classItem) => {
+                      const checked = (teacher.classIds || []).includes(classItem.id);
+                      return (
+                        <label key={classItem.id} style={styles.checkRow}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleTeacherClass(teacher.id, classItem.id)} />
+                          <span>{classItem.classLabel || classItem.id}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
-              {!classItem.teachers?.length ? <p style={styles.cardText}>{t("admin.detailNoTeachers")}</p> : null}
-              <div style={styles.teacherFooter}>
-                <button type="button" onClick={() => addTeacherRow(classItem.id)} style={styles.secondaryButtonSmall}>
-                  {t("admin.detailTeacherAdd")}
-                </button>
-                <button type="button" onClick={() => saveClassTeachers(classItem)} style={styles.primaryButtonSmall}>
-                  {t("admin.detailTeacherSave")}
-                </button>
-              </div>
-            </div>
-
-            <div style={styles.studentSummary}>
-              <span>{t("admin.detailStudentList")}</span>
-              <span>{classesById.get(classItem.id)?.stats?.totalStudents || 0}</span>
-            </div>
-          </article>
-        ))}
-
-        {!classStats.length ? <div style={styles.card}>{t("admin.detailNoClasses")}</div> : null}
-      </section>
+              </article>
+            ))}
+            {!teacherList.length ? <p style={styles.cardText}>{t("admin.detailNoTeachersCatalog")}</p> : null}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
 
+function buildTeacherCatalog(classList, previous = []) {
+  const catalog = new Map();
+  const allowedClassIds = new Set((classList || []).map((classItem) => classItem.id));
+
+  for (const teacher of previous || []) {
+    if (!teacher?.id) continue;
+    catalog.set(teacher.id, {
+      ...teacher,
+      classIds: Array.isArray(teacher.classIds)
+        ? [...new Set(teacher.classIds.filter((classId) => allowedClassIds.has(classId)))]
+        : [],
+    });
+  }
+
+  for (const classItem of classList || []) {
+    for (const teacher of classItem.teachers || []) {
+      const current = catalog.get(teacher.id) || {
+        id: teacher.id,
+        name: teacher.name || "",
+        subject: teacher.subject || "",
+        room: teacher.room || "",
+        floor: teacher.floor || "",
+        time: teacher.time || "",
+        status: teacher.status || "active",
+        note: teacher.note || "",
+        order: teacher.order || 0,
+        classIds: [],
+      };
+
+      catalog.set(teacher.id, {
+        ...current,
+        ...teacher,
+        classIds: Array.from(new Set([...(current.classIds || []), classItem.id])),
+      });
+    }
+  }
+
+  return Array.from(catalog.values()).sort((a, b) => {
+    const orderA = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+    const orderB = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+}
+
 function splitClassName(className) {
-  const normalized = String(className || "").replace(/\s+/g, "").toUpperCase();
+  const normalized = normalizeClassName(className);
   const match = normalized.match(/^(\d+)([A-ZÇĞİÖŞÜ]+)$/);
   if (match) {
     return { grade: match[1], branch: match[2] };
   }
-
   const gradeMatch = normalized.match(/^(\d+)/);
   if (gradeMatch) {
     return {
@@ -497,7 +670,6 @@ function splitClassName(className) {
       branch: normalized.slice(gradeMatch[1].length) || "A",
     };
   }
-
   return { grade: "1", branch: normalized || "A" };
 }
 
@@ -508,10 +680,34 @@ function normalizeClassName(value) {
     .toUpperCase();
 }
 
+function buildClassOptions() {
+  const classes = [];
+  for (let grade = 1; grade <= 12; grade += 1) {
+    ["A", "B", "C", "D"].forEach((branch) => {
+      classes.push(`${grade}${branch}`);
+    });
+  }
+  classes.push("Hazirlik");
+  return classes;
+}
+
+function tabStyle(active) {
+  return {
+    border: "none",
+    borderRadius: 999,
+    padding: "0.8rem 1.1rem",
+    fontWeight: 800,
+    cursor: "pointer",
+    background: active ? "#1d4ed8" : "#fff",
+    color: active ? "#fff" : "#1f2937",
+    boxShadow: active ? "0 12px 24px rgba(29, 78, 216, 0.18)" : "0 8px 18px rgba(0,0,0,0.05)",
+  };
+}
+
 const styles = {
   page: {
     display: "grid",
-    gap: 20,
+    gap: 18,
   },
   hero: {
     display: "flex",
@@ -559,6 +755,90 @@ const styles = {
   metaLabel: {
     color: "rgba(255,255,255,0.62)",
     fontSize: 13,
+  },
+  tabs: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  card: {
+    background: "#fff",
+    borderRadius: 22,
+    padding: 20,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+    display: "grid",
+    gap: 16,
+  },
+  sectionHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "start",
+    flexWrap: "wrap",
+  },
+  sectionDivider: {
+    display: "grid",
+    gap: 12,
+    paddingTop: 8,
+    borderTop: "1px solid #e5e7eb",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: 20,
+  },
+  cardText: {
+    margin: "6px 0 0",
+    color: "#6b7280",
+    lineHeight: 1.5,
+  },
+  fieldGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 12,
+  },
+  field: {
+    display: "grid",
+    gap: 8,
+  },
+  fieldLabel: {
+    color: "#374151",
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  input: {
+    width: "100%",
+    border: "1px solid #d1d5db",
+    borderRadius: 12,
+    padding: "0.75rem 0.85rem",
+    fontSize: 14,
+    boxSizing: "border-box",
+    background: "#fff",
+  },
+  selectionLabel: {
+    margin: "0 0 10px",
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#374151",
+  },
+  chipGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
+    gap: 8,
+  },
+  classChip: {
+    padding: "0.7rem 0.4rem",
+    borderRadius: 12,
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  classChipActive: {
+    background: "#1d4ed8",
+    color: "#fff",
+    borderColor: "#1d4ed8",
   },
   toolbar: {
     display: "flex",
@@ -622,17 +902,80 @@ const styles = {
     display: "grid",
     gap: 14,
   },
-  roomCard: {
+  classCard: {
     background: "#fff",
-    borderRadius: 22,
-    padding: 20,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+    borderRadius: 20,
+    padding: 18,
+    border: "1px solid #e5e7eb",
     display: "grid",
     gap: 14,
   },
-  roomHead: {
+  cardHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "start",
+  },
+  pill: {
+    padding: "0.4rem 0.75rem",
+    borderRadius: 999,
+    background: "#f3f4f6",
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+  teacherPicks: {
+    display: "grid",
+    gap: 8,
+    maxHeight: 280,
+    overflow: "auto",
+    paddingRight: 4,
+  },
+  checkRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 14,
+    color: "#374151",
+  },
+  teacherSummary: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "start",
+    paddingTop: 10,
+    borderTop: "1px solid #eef2f7",
+    color: "#4b5563",
+    fontWeight: 700,
+  },
+  teacherCatalog: {
     display: "grid",
     gap: 12,
+  },
+  teacherCard: {
+    border: "1px solid #e5e7eb",
+    borderRadius: 18,
+    padding: 16,
+    display: "grid",
+    gap: 14,
+  },
+  teacherGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+  teacherActions: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  teacherClassGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+    gap: 8,
   },
   roomAddRow: {
     display: "grid",
@@ -652,74 +995,6 @@ const styles = {
     paddingTop: 10,
     borderTop: "1px solid #f1f5f9",
   },
-  card: {
-    background: "#fff",
-    borderRadius: 22,
-    padding: 20,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-    display: "grid",
-    gap: 16,
-  },
-  cardHead: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "start",
-  },
-  cardTitle: {
-    margin: 0,
-    fontSize: 22,
-  },
-  cardText: {
-    margin: "6px 0 0",
-    color: "#6b7280",
-  },
-  pill: {
-    padding: "0.4rem 0.75rem",
-    borderRadius: 999,
-    background: "#f3f4f6",
-    color: "#111827",
-    fontSize: 13,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-  },
-  teacherList: {
-    display: "grid",
-    gap: 10,
-  },
-  teacherEditor: {
-    display: "grid",
-    gap: 10,
-    padding: "0.9rem 0",
-    borderTop: "1px solid #f1f5f9",
-  },
-  teacherGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-  },
-  teacherInput: {
-    width: "100%",
-    border: "1px solid #d1d5db",
-    borderRadius: 12,
-    padding: "0.75rem 0.85rem",
-    fontSize: 14,
-    boxSizing: "border-box",
-  },
-  teacherActions: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-  },
-  teacherStatus: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: 13,
-    color: "#374151",
-  },
   linkButton: {
     border: "none",
     background: "transparent",
@@ -727,42 +1002,5 @@ const styles = {
     fontWeight: 700,
     cursor: "pointer",
     padding: 0,
-  },
-  teacherFooter: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    paddingTop: 4,
-  },
-  teacherMeta: {
-    color: "#6b7280",
-    marginTop: 4,
-    fontSize: 14,
-  },
-  statusOn: {
-    padding: "0.35rem 0.6rem",
-    borderRadius: 999,
-    background: "#ecfdf5",
-    color: "#065f46",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  statusOff: {
-    padding: "0.35rem 0.6rem",
-    borderRadius: 999,
-    background: "#fef2f2",
-    color: "#991b1b",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  studentSummary: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 8,
-    borderTop: "1px solid #f1f5f9",
-    color: "#4b5563",
-    fontWeight: 700,
   },
 };

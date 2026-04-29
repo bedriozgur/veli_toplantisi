@@ -262,6 +262,8 @@ function normalizeClassKey(value) {
     .toUpperCase();
 }
 
+const normalizeClassName = normalizeClassKey;
+
 function splitClassName(className) {
   const normalized = normalizeClassKey(className);
   const match = normalized.match(/^(\d+)([A-ZÇĞİÖŞÜ]+)$/);
@@ -643,6 +645,49 @@ export async function createMeeting({ title, date, grades }, adminUid) {
     updateDemoStore((store) => {
       store.meetings.unshift(meeting);
       ensureMeetingClassArray(store, meeting.id);
+      const seed = hasFullSchoolSeed() ? buildSeedMeeting() : null;
+      const selected = Array.isArray(grades) ? grades : [];
+      if (seed && selected.length > 0) {
+        const seedClasses = new Map(seed.classes.map((classItem) => [normalizeClassName(classItem.id), classItem]));
+        store.roomsByMeeting[meeting.id] = clone(seed.rooms || []);
+        store.classesByMeeting[meeting.id] = selected.map((className, index) => {
+          const normalized = normalizeClassName(className);
+          const template = seedClasses.get(normalized);
+          const gradeMatch = String(className || "").match(/^(\d+)/);
+          const grade = template?.grade || gradeMatch?.[1] || String(className || "").replace(/[^0-9]/g, "") || "1";
+          const branch = template?.branch || String(className || "").replace(/^\d+/, "") || "A";
+          const teachers = clone(template?.teachers || []);
+          const accessCode = template?.accessCode || generateAccessCode(grade, branch || "A");
+          return {
+            id: className,
+            classLabel: className,
+            grade,
+            branch,
+            meetingTitle: meeting.title || "",
+            meetingDate: meeting.date || "",
+            accessCode,
+            teachers,
+            stats: {
+              totalStudents: 0,
+              visitedCount: 0,
+            },
+            createdAt: nowIso(),
+            updatedAt: nowIso(),
+          };
+        });
+        for (const classItem of store.classesByMeeting[meeting.id]) {
+          store.accessCodes[classItem.accessCode] = {
+            code: classItem.accessCode,
+            meetingId: meeting.id,
+            classId: classItem.id,
+            classLabel: classItem.classLabel,
+            meetingTitle: meeting.title || "",
+            meetingDate: meeting.date || "",
+            expiresAt: meeting.date ? new Date(`${meeting.date}T23:59:59.999Z`).toISOString() : null,
+            active: true,
+          };
+        }
+      }
       hydrateDemoMeetingFromSeed(store, meeting.id);
       return store;
     });
@@ -724,6 +769,40 @@ export async function deleteMeeting(meetingId) {
 
   batch.delete(doc(ensureDb(), "meetings", meetingId));
   await batch.commit();
+}
+
+export async function deleteClass(meetingId, classId) {
+  if (!hasFirestore()) {
+    updateDemoStore((store) => {
+      ensureMeetingClassArray(store, meetingId);
+      store.classesByMeeting[meetingId] = (store.classesByMeeting[meetingId] || []).filter((item) => item.id !== classId);
+      if (store.studentsByMeeting[meetingId]) {
+        delete store.studentsByMeeting[meetingId][classId];
+      }
+      Object.keys(store.accessCodes || {}).forEach((code) => {
+        if (store.accessCodes[code]?.meetingId === meetingId && store.accessCodes[code]?.classId === classId) {
+          delete store.accessCodes[code];
+        }
+      });
+      return store;
+    });
+    return;
+  }
+
+  const classRef = doc(ensureDb(), "meetings", meetingId, "classes", classId);
+  const batch = writeBatch(ensureDb());
+  const students = await getStudents(meetingId, classId);
+  for (const student of students) {
+    batch.delete(doc(ensureDb(), "meetings", meetingId, "classes", classId, "students", student.id));
+  }
+  batch.delete(classRef);
+  await batch.commit();
+
+  const access = await getDocs(collection(ensureDb(), "accessCodes"));
+  const match = access.docs.find((item) => item.data()?.meetingId === meetingId && item.data()?.classId === classId);
+  if (match) {
+    await deleteDoc(doc(ensureDb(), "accessCodes", match.id));
+  }
 }
 
 export async function getClasses(meetingId) {
