@@ -88,7 +88,7 @@ export default function FrontDeskHome() {
       <div style={styles.head}>
         <div>
           <h2 style={styles.h2}>{t("frontDesk.search")}</h2>
-          <p style={styles.text}>Öğrenci, veli ya da sınıf adıyla arayın. Sonra geliş kaydını girin.</p>
+          <p style={styles.text}>{t("frontDesk.title")}</p>
         </div>
         <div style={styles.metrics}>
           <div style={styles.metric}>
@@ -96,7 +96,7 @@ export default function FrontDeskHome() {
             <strong>{summary.meetings}</strong>
           </div>
           <div style={styles.metric}>
-            <span style={styles.metricLabel}>Sonuç</span>
+            <span style={styles.metricLabel}>{t("frontDesk.results")}</span>
             <strong>{summary.results}</strong>
           </div>
         </div>
@@ -116,7 +116,7 @@ export default function FrontDeskHome() {
           }}
         />
         <button onClick={runSearch} style={styles.button} disabled={searching}>
-          {searching ? "Aranıyor…" : "Ara"}
+          {searching ? t("frontDesk.searching") : t("frontDesk.searchButton")}
         </button>
       </div>
 
@@ -127,7 +127,9 @@ export default function FrontDeskHome() {
               <>
                 <div>
                   <strong>{result.classItem.classLabel || result.classItem.id}</strong>
-                  <div style={styles.sub}>{result.meeting.title} · {result.meeting.date || "tarih yok"}</div>
+                  <div style={styles.sub}>
+                    {result.meeting.title} · {result.meeting.date || t("parent.notSpecified")}
+                  </div>
                 </div>
                 <span style={styles.classBadge}>{result.classItem.accessCode || "-"}</span>
               </>
@@ -139,31 +141,35 @@ export default function FrontDeskHome() {
                     <div style={styles.sub}>
                       {result.classItem.classLabel || result.classItem.id} · {result.meeting.title}
                     </div>
-                    {result.student.parentName ? <div style={styles.muted}>Veli: {result.student.parentName}</div> : null}
+                    {result.student.parentName ? (
+                      <div style={styles.muted}>
+                        {t("frontDesk.parent")}: {result.student.parentName}
+                      </div>
+                    ) : null}
                   </div>
                   <div style={styles.badges}>
                     <span style={result.student.arrivedAt ? styles.arrivedBadge : styles.waitBadge}>
-                      {result.student.arrivedAt ? "Geldi" : "Bekliyor"}
+                      {result.student.arrivedAt ? t("frontDesk.arrived") : t("frontDesk.waiting")}
                     </span>
                     {result.student.parentPhone ? <span style={styles.phoneBadge}>{result.student.parentPhone}</span> : null}
                   </div>
                 </div>
-                  <button
+                <button
                   style={styles.smallButton}
                   onClick={() => handleMarkArrived(result)}
                   disabled={Boolean(result.student.arrivedAt) && markingKey !== `${result.meeting.id}:${result.classItem.id}:${result.student.id}`}
                 >
                   {markingKey === `${result.meeting.id}:${result.classItem.id}:${result.student.id}`
-                    ? "Kaydediliyor…"
+                    ? t("parent.sending")
                     : result.student.arrivedAt
-                      ? "Kaydedildi"
+                      ? t("frontDesk.arrived")
                       : t("frontDesk.arrived")}
                 </button>
               </>
             )}
           </article>
         ))}
-        {!results.length ? <p style={styles.text}>Arama sonucunuz burada görünecek.</p> : null}
+        {!results.length ? <p style={styles.text}>{t("frontDesk.noResults")}</p> : null}
       </div>
     </section>
   );

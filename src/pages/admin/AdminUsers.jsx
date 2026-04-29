@@ -15,7 +15,7 @@ export default function AdminUsers() {
       <div style={styles.head}>
         <div>
           <h2 style={styles.h2}>{t("admin.users")}</h2>
-          <p style={styles.text}>Firebase Auth kullanıcı profilleri ve roller.</p>
+          <p style={styles.text}>{t("admin.usersDescription")}</p>
         </div>
         <span style={styles.count}>{users.length} kişi</span>
       </div>
@@ -29,7 +29,7 @@ export default function AdminUsers() {
             <span style={styles.role}>{user.role}</span>
           </div>
         ))}
-        {!users.length ? <p style={styles.text}>Kullanıcı bulunamadı.</p> : null}
+        {!users.length ? <p style={styles.text}>{t("admin.noUsers")}</p> : null}
       </div>
     </div>
   );

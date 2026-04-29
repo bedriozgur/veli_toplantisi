@@ -48,10 +48,10 @@ export default function AdminDashboard() {
       setTitle("");
       setDate("");
       setGrades("5A,5B,6A");
-      setMessage("Toplantı oluşturuldu. Sınıf ve öğrenci CSV yükleme artık toplantı detayında.");
+      setMessage(t("admin.created"));
       navigate(`/admin/meetings/${meeting.id}`);
     } catch (err) {
-      setMessage(err?.message || "Toplantı oluşturulamadı.");
+      setMessage(err?.message || t("admin.createFailed"));
     } finally {
       setBusy(false);
     }
@@ -61,24 +61,22 @@ export default function AdminDashboard() {
     <div style={styles.page}>
       <section style={styles.hero}>
         <div>
-          <div style={styles.badge}>Dashboard</div>
+          <div style={styles.badge}>{t("admin.dashboard")}</div>
           <h2 style={styles.title}>{t("admin.dashboard")}</h2>
-          <p style={styles.text}>
-            Yeni toplantı oluşturun, sonra sınıf ve öğrenci CSV dosyalarını toplantı detayında içe aktarın.
-          </p>
+          <p style={styles.text}>{t("admin.dashboardDescription")}</p>
         </div>
 
         <div style={styles.stats}>
           <div style={styles.statCard}>
-            <span style={styles.statLabel}>Toplantı</span>
+            <span style={styles.statLabel}>{t("admin.totalMeetings")}</span>
             <strong>{stats.total}</strong>
           </div>
           <div style={styles.statCard}>
-            <span style={styles.statLabel}>Aktif</span>
+            <span style={styles.statLabel}>{t("admin.activeMeetings")}</span>
             <strong>{stats.active}</strong>
           </div>
           <div style={styles.statCard}>
-            <span style={styles.statLabel}>Taslak</span>
+            <span style={styles.statLabel}>{t("admin.draftMeetings")}</span>
             <strong>{stats.draft}</strong>
           </div>
         </div>
@@ -86,13 +84,13 @@ export default function AdminDashboard() {
 
       <div style={styles.columns}>
         <section style={styles.card}>
-          <h3 style={styles.cardTitle}>Yeni toplantı</h3>
+          <h3 style={styles.cardTitle}>{t("admin.newMeeting")}</h3>
           <form onSubmit={handleCreate} style={styles.form}>
             <input placeholder={t("admin.meetingTitle")} value={title} onChange={(e) => setTitle(e.target.value)} style={styles.input} />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.input} />
             <input placeholder={t("admin.meetingGrades")} value={grades} onChange={(e) => setGrades(e.target.value)} style={styles.input} />
             <button style={styles.button} disabled={busy}>
-              {busy ? "Oluşturuluyor…" : t("admin.createMeeting")}
+              {busy ? t("admin.creating") : t("admin.createMeeting")}
             </button>
           </form>
           {message ? <p style={styles.message}>{message}</p> : null}
@@ -112,7 +110,7 @@ export default function AdminDashboard() {
                   <strong>{meeting.title}</strong>
                   <div style={styles.sub}>{meeting.date || "Tarih yok"} · {meeting.status}</div>
                 </div>
-                <span style={styles.link}>Aç</span>
+                <span style={styles.link}>{t("admin.open")}</span>
               </button>
             ))}
             {!meetings.length ? <p style={styles.text}>{t("admin.noMeetings")}</p> : null}

@@ -28,7 +28,7 @@ export default function ParentMeetingView() {
       const classes = await getClasses(resolved.meetingId);
       const loadedClass = classes.find((item) => item.id === resolved.classId) || null;
       if (!loadedClass) {
-        setError("Sınıf kaydı bulunamadı.");
+        setError(t("parent.classMissing"));
         return;
       }
 
@@ -94,14 +94,14 @@ export default function ParentMeetingView() {
     <div style={styles.page}>
       <LanguageToggle />
       <section style={styles.card}>
-        <div style={styles.badge}>Veli Görünümü</div>
+        <div style={styles.badge}>{t("parent.view")}</div>
         <h1 style={styles.title}>{access.meetingTitle || t("login.title")}</h1>
         <p style={styles.text}>
-          {access.meetingDate || "Tarih belirtilmedi"} · Kod: {code} · Sınıf: {access.classLabel || classItem.id}
+          {access.meetingDate || t("parent.notSpecified")} · {t("parent.code")}: {code} · {t("parent.classLabel")}: {access.classLabel || classItem.id}
         </p>
 
         <label style={styles.label}>
-          Öğrenci seçin
+          {t("parent.selectStudent")}
           <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} style={styles.input}>
             {students.map((student) => (
               <option key={student.id} value={student.id}>{student.studentName}</option>
@@ -116,12 +116,12 @@ export default function ParentMeetingView() {
                 const draft = drafts[teacher.id] || {};
                 return (
                   <div key={teacher.id} style={styles.teacherCard}>
-                    <div style={styles.teacherTop}>
-                  <div>
-                    <strong>{teacher.subject || teacher.name}</strong>
-                      <div style={styles.sub}>{teacher.name} · {teacher.room || "-"}</div>
-                  </div>
-                  <label style={styles.checkWrap}>
+                  <div style={styles.teacherTop}>
+                    <div>
+                      <strong>{teacher.subject || teacher.name}</strong>
+                      <div style={styles.sub}>{teacher.name} · {teacher.room || t("parent.notSpecified")}</div>
+                    </div>
+                    <label style={styles.checkWrap}>
                         <input
                           type="checkbox"
                           checked={Boolean(draft.visited)}
@@ -130,7 +130,7 @@ export default function ParentMeetingView() {
                             [teacher.id]: { ...prev[teacher.id], visited: e.target.checked },
                           }))}
                         />
-                        Görüşüldü
+                        {t("frontDesk.arrived")}
                       </label>
                     </div>
                     <textarea
@@ -139,7 +139,7 @@ export default function ParentMeetingView() {
                         ...prev,
                         [teacher.id]: { ...prev[teacher.id], notes: e.target.value },
                       }))}
-                      placeholder="Notlar"
+                      placeholder={t("parent.notes")}
                       rows={3}
                       style={styles.textarea}
                     />
@@ -150,9 +150,9 @@ export default function ParentMeetingView() {
 
             <div style={styles.actions}>
               <button type="button" onClick={handleSave} disabled={saving} style={styles.button}>
-                {saving ? "Kaydediliyor…" : "Kaydet"}
+                {saving ? t("parent.sending") : t("parent.save")}
               </button>
-              <a href={mailto} style={styles.link}>Notları e-posta ile gönder</a>
+              <a href={mailto} style={styles.link}>{t("parent.sendEmail")}</a>
             </div>
           </>
         ) : null}

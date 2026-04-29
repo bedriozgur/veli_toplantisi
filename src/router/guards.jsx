@@ -1,11 +1,13 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
 
 function LoadingScreen() {
+  const { t } = useLanguage();
   return (
     <div style={styles.wrap}>
-      <div style={styles.card}>Yükleniyor…</div>
+      <div style={styles.card}>{t("app.loading")}</div>
     </div>
   );
 }

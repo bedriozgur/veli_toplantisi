@@ -34,10 +34,10 @@ export default function ParentCodeEntry() {
     <div style={styles.page}>
       <LanguageToggle />
       <form onSubmit={handleSubmit} style={styles.card}>
-        <div style={styles.badge}>Veli Girişi</div>
+        <div style={styles.badge}>{t("parent.badge")}</div>
         <h1 style={styles.title}>{t("parent.entryTitle")}</h1>
         <p style={styles.text}>{t("parent.entryText")}</p>
-        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="5A-X7K2" style={styles.input} />
+        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t("parent.codePlaceholder")} style={styles.input} />
         {error ? <p style={styles.error}>{error}</p> : null}
         <button disabled={loading} style={styles.button}>{loading ? t("parent.loading") : t("parent.submit")}</button>
         <p style={styles.footer}>

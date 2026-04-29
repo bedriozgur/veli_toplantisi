@@ -16,7 +16,7 @@ export default function AdminMeetings() {
       <div style={styles.head}>
         <div>
           <h2 style={styles.h2}>{t("admin.meetings")}</h2>
-          <p style={styles.text}>Her toplantının içine sınıf ve öğrenci CSV yükleyebilirsiniz.</p>
+          <p style={styles.text}>{t("admin.meetingsDescription")}</p>
         </div>
         <span style={styles.count}>{meetings.length} kayıt</span>
       </div>
@@ -27,7 +27,7 @@ export default function AdminMeetings() {
               <strong>{meeting.title}</strong>
               <div style={styles.sub}>{meeting.date || "Tarih yok"} · {meeting.status}</div>
             </div>
-            <span style={styles.go}>Aç</span>
+            <span style={styles.go}>{t("admin.open")}</span>
           </Link>
         ))}
         {!meetings.length ? <p style={styles.text}>{t("admin.noMeetings")}</p> : null}

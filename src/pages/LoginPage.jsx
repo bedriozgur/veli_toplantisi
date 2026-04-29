@@ -33,7 +33,7 @@ export default function LoginPage() {
         await login(email.trim(), password);
       }
     } catch (err) {
-      setError(getErrorMessage(err?.code));
+      setError(getErrorMessage(t, err?.code));
     } finally {
       setLoading(false);
     }
@@ -98,16 +98,16 @@ export default function LoginPage() {
   );
 }
 
-function getErrorMessage(code) {
+function getErrorMessage(t, code) {
   switch (code) {
     case "auth/user-not-found":
     case "auth/wrong-password":
     case "auth/invalid-credential":
-      return "E-posta veya şifre hatalı.";
+      return t("login.errorInvalid");
     case "auth/too-many-requests":
-      return "Çok fazla deneme. Lütfen bir süre bekleyin.";
+      return t("login.errorManyRequests");
     default:
-      return "Giriş yapılırken bir hata oluştu.";
+      return t("login.errorGeneric");
   }
 }
 

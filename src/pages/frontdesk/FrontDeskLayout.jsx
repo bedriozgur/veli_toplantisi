@@ -10,8 +10,8 @@ export default function FrontDeskLayout() {
       <LanguageToggle />
       <header style={styles.header}>
         <div style={styles.badge}>{t("app.frontDesk")}</div>
-        <h1 style={styles.title}>Gelen öğrencileri hızlıca yönetin</h1>
-        <p style={styles.text}>Sınıf ya da öğrenci adıyla arayın, giriş kaydı yapın.</p>
+        <h1 style={styles.title}>{t("frontDesk.title")}</h1>
+        <p style={styles.text}>{t("frontDesk.search")}</p>
       </header>
       <Outlet />
     </div>
