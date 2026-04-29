@@ -255,6 +255,145 @@ function ensureMeetingClassArray(store, meetingId) {
   }
 }
 
+function normalizeClassKey(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/[\/.]/g, "")
+    .toUpperCase();
+}
+
+function splitClassName(className) {
+  const normalized = normalizeClassKey(className);
+  const match = normalized.match(/^(\d+)([A-ZÇĞİÖŞÜ]+)$/);
+  if (match) {
+    return { grade: match[1], branch: match[2] };
+  }
+
+  const gradeMatch = normalized.match(/^(\d+)/);
+  if (gradeMatch) {
+    return {
+      grade: gradeMatch[1],
+      branch: normalized.slice(gradeMatch[1].length) || "A",
+    };
+  }
+
+  return { grade: normalized || "1", branch: "" };
+}
+
+function findSeedClass(seedClasses, className) {
+  const normalized = normalizeClassKey(className);
+  return (seedClasses || []).find(
+    (classItem) =>
+      normalizeClassKey(classItem.id) === normalized || normalizeClassKey(classItem.classLabel) === normalized
+  );
+}
+
+function hydrateDemoMeetingFromSeed(store, meetingId) {
+  const meeting = store.meetings.find((item) => item.id === meetingId);
+  if (!meeting) return false;
+
+  const seedMeetingId = "demo-school-meeting";
+  const seedClasses = store.classesByMeeting?.[seedMeetingId] || [];
+  const seedStudents = store.studentsByMeeting?.[seedMeetingId] || {};
+  const seedRooms = store.roomsByMeeting?.[seedMeetingId] || [];
+  let changed = false;
+
+  ensureMeetingClassArray(store, meetingId);
+
+  if ((store.roomsByMeeting[meetingId] || []).length === 0 && seedRooms.length > 0) {
+    store.roomsByMeeting[meetingId] = clone(seedRooms);
+    changed = true;
+  }
+
+  if (store.classesByMeeting[meetingId].length === 0 && Array.isArray(meeting.grades) && meeting.grades.length > 0) {
+    store.classesByMeeting[meetingId] = meeting.grades
+      .map((className, index) => {
+        const classLabel = String(className || "").trim();
+        if (!classLabel) return null;
+
+        const seedClass = findSeedClass(seedClasses, classLabel);
+        const seedStudentsForClass = clone(seedStudents[seedClass?.id || classLabel] || []);
+        const { grade, branch } = splitClassName(classLabel);
+        const accessCode = generateAccessCode(seedClass?.grade || grade, seedClass?.branch || branch);
+        const teachers = clone(seedClass?.teachers || []).map((teacher, teacherIndex) => ({
+          ...teacher,
+          id: teacher.id || `teacher-${teacherIndex + 1}`,
+          order: teacherIndex + 1,
+        }));
+
+        store.studentsByMeeting[meetingId][classLabel] = seedStudentsForClass;
+        store.accessCodes[accessCode] = {
+          code: accessCode,
+          meetingId,
+          classId: classLabel,
+          classLabel,
+          meetingTitle: meeting.title || "",
+          meetingDate: meeting.date || "",
+          expiresAt: meeting.date ? new Date(`${meeting.date}T23:59:59.999Z`).toISOString() : null,
+          active: true,
+        };
+        changed = true;
+
+        return {
+          id: classLabel,
+          classLabel,
+          grade: seedClass?.grade || grade,
+          branch: seedClass?.branch || branch,
+          meetingTitle: meeting.title || "",
+          meetingDate: meeting.date || "",
+          accessCode,
+          teachers,
+          stats: {
+            totalStudents: seedStudentsForClass.length,
+            visitedCount: 0,
+          },
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  store.classesByMeeting[meetingId] = (store.classesByMeeting[meetingId] || []).map((classItem) => {
+    const seedClass = findSeedClass(seedClasses, classItem.id || classItem.classLabel);
+    if (!seedClass) return classItem;
+
+    const nextTeachers = Array.isArray(classItem.teachers) && classItem.teachers.length
+      ? classItem.teachers
+      : clone(seedClass.teachers || []);
+    const nextStudents = store.studentsByMeeting?.[meetingId]?.[classItem.id]?.length
+      ? store.studentsByMeeting[meetingId][classItem.id]
+      : clone(seedStudents[seedClass.id] || []);
+
+    if (!classItem.teachers?.length && nextTeachers.length) {
+      changed = true;
+    }
+    if ((!store.studentsByMeeting[meetingId][classItem.id] || !store.studentsByMeeting[meetingId][classItem.id].length) && nextStudents.length) {
+      changed = true;
+    }
+
+    store.studentsByMeeting[meetingId][classItem.id] = nextStudents.map((student) => ({
+      ...student,
+      meetings: student.meetings || Object.fromEntries((nextTeachers || []).map((teacher) => [teacher.id, { visited: false, visitedAt: null, notes: "" }])),
+    }));
+
+    return {
+      ...classItem,
+      teachers: nextTeachers.map((teacher, index) => ({
+        ...teacher,
+        id: teacher.id || `teacher-${index + 1}`,
+        order: index + 1,
+      })),
+      stats: {
+        totalStudents: nextStudents.length,
+        visitedCount: Number(classItem?.stats?.visitedCount || 0),
+      },
+    };
+  });
+
+  return changed;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -504,6 +643,7 @@ export async function createMeeting({ title, date, grades }, adminUid) {
     updateDemoStore((store) => {
       store.meetings.unshift(meeting);
       ensureMeetingClassArray(store, meeting.id);
+      hydrateDemoMeetingFromSeed(store, meeting.id);
       return store;
     });
 
@@ -588,7 +728,11 @@ export async function deleteMeeting(meetingId) {
 
 export async function getClasses(meetingId) {
   if (!hasFirestore()) {
-    return clone(readDemoStore().classesByMeeting[meetingId] || []);
+    const store = updateDemoStore((current) => {
+      hydrateDemoMeetingFromSeed(current, meetingId);
+      return current;
+    });
+    return clone(store.classesByMeeting[meetingId] || []);
   }
 
   const snap = await getDocs(collection(ensureDb(), "meetings", meetingId, "classes"));
