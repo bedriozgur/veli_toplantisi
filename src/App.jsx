@@ -30,6 +30,9 @@ import {
   importClassesFromCsv,
   importStudentsFromCsv,
   importTeachersFromCsv,
+  buildClassRosterPayload,
+  parseClassRosterCsv,
+  parseStudentRosterCsv,
   STUDENT_TEMPLATE_CSV,
   TEACHER_TEMPLATE_CSV,
 } from "./utils/importData";
@@ -181,7 +184,7 @@ function buildParentPayload(source, student) {
 function loadMeetingLibrary() {
   const parsed = safeParseStorage(MEETING_LIBRARY_KEY, []);
   return Array.isArray(parsed)
-    ? parsed.filter(Boolean).map((item) => ({
+    ? parsed.filter(Boolean).map((item) => normalizeMeetingSnapshot({
         id: item.id || createId(),
         label: item.label || item.evtName || "Saved meeting",
         createdAt: item.createdAt || new Date().toISOString(),
@@ -198,12 +201,25 @@ function loadMeetingLibrary() {
           expiresAt: item.expiresAt || "",
           landingHelpText: item.landingHelpText || DEFAULT_LANDING_HELP,
           landingNoteText: item.landingNoteText || DEFAULT_LANDING_NOTE,
-          teachers: normalizeTeachers(item.teachers || []),
-          classes: normalizeClasses(item.classes || []),
-          students: normalizeStudents(item.students || []),
+          teachers: item.teachers || [],
+          classes: item.classes || [],
+          students: item.students || [],
         }),
       }))
     : [];
+}
+
+function normalizeMeetingSnapshot(snapshot) {
+  return {
+    ...snapshot,
+    teachers: Array.isArray(snapshot?.teachers) ? snapshot.teachers.map((teacher) => ({ ...teacher })) : [],
+    classes: Array.isArray(snapshot?.classes)
+      ? snapshot.classes.map((cls) => ({ ...cls, tids: Array.isArray(cls?.tids) ? [...cls.tids] : [] }))
+      : [],
+    students: Array.isArray(snapshot?.students)
+      ? snapshot.students.map((student) => ({ ...student }))
+      : [],
+  };
 }
 
 export default function App() {
@@ -430,6 +446,13 @@ export default function App() {
     safeSetStorage(MEETING_LIBRARY_KEY, JSON.stringify(meetingLibrary));
   }, [meetingLibrary]);
 
+  const updateMeetingLibrary = (updater) => {
+    setMeetingLibrary((previous) => {
+      const next = typeof updater === "function" ? updater(previous) : updater;
+      return Array.isArray(next) ? next.map(normalizeMeetingSnapshot) : previous;
+    });
+  };
+
   const resolvedLogo = schoolLogo || logoImg;
 
   useEffect(() => {
@@ -605,7 +628,10 @@ export default function App() {
   };
 
   const openAdminView = () => openStaffView("admin");
-  const openFrontDeskView = () => openStaffView("frontdesk");
+  const openFrontDeskView = () => {
+    window.location.hash = "";
+    setMode("frontdesk");
+  };
 
   const goHome = () => {
     window.location.hash = "";
@@ -694,7 +720,7 @@ export default function App() {
       createdAt: new Date().toISOString(),
       ...currentEvent,
     };
-    setMeetingLibrary((previous) => [snapshot, ...previous.filter((item) => item.eventCode !== snapshot.eventCode)]);
+    updateMeetingLibrary((previous) => [snapshot, ...previous.filter((item) => item.eventCode !== snapshot.eventCode)]);
     setPublishState("Meeting snapshot saved");
   };
 
@@ -712,12 +738,129 @@ export default function App() {
     setExpiresAt(snapshot.expiresAt || "");
     setLandingHelpText(snapshot.landingHelpText || DEFAULT_LANDING_HELP);
     setLandingNoteText(snapshot.landingNoteText || DEFAULT_LANDING_NOTE);
-    setTeachers(normalizeTeachers(snapshot.teachers || []));
-    setClasses(normalizeClasses(snapshot.classes || []));
-    setStudents(normalizeStudents(snapshot.students || []));
+    setTeachers(Array.isArray(snapshot.teachers) ? snapshot.teachers.map((teacher) => ({ ...teacher })) : []);
+    setClasses(Array.isArray(snapshot.classes) ? snapshot.classes.map((cls) => ({ ...cls, tids: Array.isArray(cls?.tids) ? [...cls.tids] : [] })) : []);
+    setStudents(Array.isArray(snapshot.students) ? snapshot.students.map((student) => ({ ...student })) : []);
     setAdminTab("settings");
     setPublishState("Meeting snapshot loaded");
     goHome();
+  };
+
+  const renameMeetingSnapshot = (meetingId, label) => {
+    const nextLabel = String(label || "").trim();
+    if (!nextLabel) return;
+    updateMeetingLibrary((previous) =>
+      previous.map((item) => (item.id === meetingId ? { ...item, label: nextLabel } : item))
+    );
+  };
+
+  const duplicateMeetingSnapshot = (meeting) => {
+    if (!meeting) return;
+    const copy = normalizeMeetingSnapshot({
+      ...meeting,
+      id: createId(),
+      eventCode: makeEventCode(),
+      label: `${meeting.label || meeting.evtName || "Saved meeting"} copy`,
+      createdAt: new Date().toISOString(),
+    });
+    updateMeetingLibrary((previous) => [copy, ...previous]);
+    setPublishState("Meeting duplicated");
+  };
+
+  const deleteMeetingSnapshot = (meetingId) => {
+    updateMeetingLibrary((previous) => previous.filter((item) => item.id !== meetingId));
+  };
+
+  const importMeetingClasses = async (meetingId, text) => {
+    const roster = buildClassRosterPayload(parseClassRosterCsv(text));
+    if (!roster.length) return { message: "CSV içinde sınıf kaydı bulunamadı.", count: 0 };
+
+    let importedTeachers = 0;
+    const nextClasses = [];
+    const nextTeachers = [];
+
+    roster.forEach((classItem) => {
+      const classId = classItem.id || classItem.className.replace(/\s+/g, "").toUpperCase();
+      const classTeachers = classItem.teachers.map((teacher) => ({
+        ...teacher,
+        id: createId(),
+      }));
+      importedTeachers += classTeachers.length;
+      nextTeachers.push(...classTeachers);
+      nextClasses.push({
+        id: classId,
+        name: classItem.className,
+        tids: classTeachers.map((teacher) => teacher.id),
+      });
+    });
+
+    updateMeetingLibrary((previous) =>
+      previous.map((meeting) =>
+        meeting.id === meetingId
+          ? {
+              ...meeting,
+              teachers: nextTeachers,
+              classes: nextClasses,
+            }
+          : meeting
+      )
+    );
+
+    return { message: `${roster.length} sınıf ve ${importedTeachers} öğretmen içe aktarıldı.`, count: roster.length };
+  };
+
+  const importMeetingStudents = async (meetingId, text) => {
+    const meeting = meetingLibrary.find((item) => item.id === meetingId);
+    if (!meeting) return { message: "Toplantı bulunamadı.", count: 0 };
+
+    const parsed = parseStudentRosterCsv(text);
+    if (!parsed.length) return { message: "CSV içinde öğrenci kaydı bulunamadı.", count: 0 };
+
+    const classLookup = new Map(
+      (meeting.classes || []).map((classItem) => [String(classItem.name || classItem.id).trim().toLowerCase(), classItem.id])
+    );
+
+    const importedStudents = [];
+    let skipped = 0;
+
+    parsed.forEach((row) => {
+      const classId = classLookup.get(String(row.className || "").trim().toLowerCase());
+      if (!classId) {
+        skipped += 1;
+        return;
+      }
+      importedStudents.push({
+        id: createId(),
+        child: row.studentName,
+        parent: row.parentName,
+        cid: classId,
+        parentPhone: row.parentPhone,
+        note: row.note,
+      });
+    });
+
+    if (!importedStudents.length) {
+      return { message: "Sınıf eşleşmesi bulunamadı.", count: 0 };
+    }
+
+    updateMeetingLibrary((previous) =>
+      previous.map((item) =>
+        item.id === meetingId
+          ? {
+              ...item,
+              students: [...(item.students || []), ...importedStudents],
+            }
+          : item
+      )
+    );
+
+    return {
+      message:
+        skipped > 0
+          ? `${importedStudents.length} öğrenci içe aktarıldı, ${skipped} satır atlandı.`
+          : `${importedStudents.length} öğrenci içe aktarıldı.`,
+      count: importedStudents.length,
+    };
   };
 
   const sendEmail = () => {
@@ -998,6 +1141,11 @@ export default function App() {
             currentEvent={currentEvent}
             onSaveSnapshot={saveMeetingSnapshot}
             onLoadSnapshot={loadMeetingSnapshot}
+            onRenameSnapshot={renameMeetingSnapshot}
+            onDuplicateSnapshot={duplicateMeetingSnapshot}
+            onDeleteSnapshot={deleteMeetingSnapshot}
+            onImportClasses={importMeetingClasses}
+            onImportStudents={importMeetingStudents}
           />
         )}
         {adminTab === "teachers" && (
@@ -1050,7 +1198,7 @@ export default function App() {
         )}
         {adminTab === "classes" && <ClassesTab classes={classes} setClasses={setClasses} teachers={teachers} students={students} onRemove={(id) => {
           setClasses((p) => p.filter((c) => c.id !== id));
-          setStudents((p) => p.map((s) => (s.cid === id ? { ...s, cid: null } : s)));
+          setStudents((p) => p.map((s) => (String(s.cid) === String(id) ? { ...s, cid: null } : s)));
         }} />}
         {adminTab === "students" && <StudentsTab students={students} setStudents={setStudents} classes={classes} teachers={teachers} studentUrl={studentUrl} qrStuId={qrStuId} setQrStuId={setQrStuId} onOpenEventQr={() => setShowEventQr(true)} cloudReady={cloudReady} publishState={publishState} />}
       </div>
@@ -1801,7 +1949,7 @@ function ClassesTab({ classes, setClasses, teachers, students, onRemove }) {
       {showAdd && <Card border><input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Class name" style={{ ...iBase, marginBottom: 10 }} /><Btn onClick={addC} amber full>Add Class</Btn></Card>}
       {classes.map((cls) => {
         const isOpen = openId === cls.id;
-        const stuCount = students.filter((s) => s.cid === cls.id).length;
+        const stuCount = students.filter((s) => String(s.cid) === String(cls.id)).length;
         const activeTeacherCount = teachers.filter((t) => (cls?.tids || []).includes(t.id) && t.status !== "unavailable").length;
         return (
           <div key={cls.id} style={{ background: "white", borderRadius: 16, marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", overflow: "hidden" }}>
@@ -1845,19 +1993,19 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
 
   const addOne = () => {
     if (!form.child) return;
-    setStudents((p) => [...p, { ...form, cid: form.cid ? Number(form.cid) : null, id: createId() }]);
+    setStudents((p) => [...p, { ...form, cid: form.cid || null, id: createId() }]);
     setForm((p) => ({ child: "", parent: "", cid: p.cid }));
     setShowAdd(false);
   };
 
   const addBulk = () => {
     const names = bulkText.split("\n").map((n) => n.trim()).filter(Boolean);
-    setStudents((p) => [...p, ...names.map((child) => ({ id: createId(), child, parent: "", cid: bulkCid ? Number(bulkCid) : null }))]);
+    setStudents((p) => [...p, ...names.map((child) => ({ id: createId(), child, parent: "", cid: bulkCid || null }))]);
     setBulkText("");
     setBulk(false);
   };
 
-  const visible = students.filter((s) => filter === "all" || s.cid === Number(filter));
+  const visible = students.filter((s) => filter === "all" || String(s.cid) === String(filter));
 
   const importStudentCsv = async (event) => {
     const file = event.target.files?.[0];
@@ -1925,14 +2073,14 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
         <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
           <Chip label={`All (${students.length})`} active={filter === "all"} onClick={() => setFilter("all")} />
           {classes.map((c) => {
-            const n = students.filter((s) => s.cid === c.id).length;
+            const n = students.filter((s) => String(s.cid) === String(c.id)).length;
             return <Chip key={c.id} label={`${c.name} (${n})`} active={filter == c.id} onClick={() => setFilter(String(c.id))} />;
           })}
         </div>
       )}
 
       {visible.map((s) => {
-        const cls = classes.find((c) => c.id === s.cid);
+        const cls = classes.find((c) => String(c.id) === String(s.cid));
         const activeTeacherCount = cls ? teachers.filter((t) => (cls?.tids || []).includes(t.id) && t.status !== "unavailable").length : 0;
         return (
           <div key={s.id} style={{ background: "white", borderRadius: 14, padding: "13px 16px", marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
@@ -1954,15 +2102,77 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
   );
 }
 
-function MeetingsTab({ meetings, currentEvent, onSaveSnapshot, onLoadSnapshot }) {
+function MeetingsTab({ meetings, currentEvent, onSaveSnapshot, onLoadSnapshot, onRenameSnapshot, onDuplicateSnapshot, onDeleteSnapshot, onImportClasses, onImportStudents }) {
   const sortedMeetings = Array.isArray(meetings) ? meetings : [];
+  const classFileRef = useRef(null);
+  const studentFileRef = useRef(null);
+  const [editId, setEditId] = useState("");
+  const [draftLabel, setDraftLabel] = useState("");
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [importTarget, setImportTarget] = useState("");
+  const [importKind, setImportKind] = useState("");
+
+  const beginRename = (meeting) => {
+    setEditId(meeting.id);
+    setDraftLabel(meeting.label || meeting.evtName || "");
+  };
+
+  const finishRename = () => {
+    if (!editId) return;
+    onRenameSnapshot(editId, draftLabel);
+    setEditId("");
+    setDraftLabel("");
+    setNotice("Meeting renamed.");
+  };
+
+  const chooseImport = (meetingId, kind) => {
+    setImportTarget(meetingId);
+    setImportKind(kind);
+    if (kind === "classes") classFileRef.current?.click();
+    if (kind === "students") studentFileRef.current?.click();
+  };
+
+  const handleClassImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBusy("classes");
+    setNotice("");
+    try {
+      const text = await file.text();
+      const result = await onImportClasses(importTarget, text);
+      setNotice(result?.message || "Class CSV imported.");
+    } finally {
+      setBusy("");
+      event.target.value = "";
+      setImportTarget("");
+      setImportKind("");
+    }
+  };
+
+  const handleStudentImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBusy("students");
+    setNotice("");
+    try {
+      const text = await file.text();
+      const result = await onImportStudents(importTarget, text);
+      setNotice(result?.message || "Student CSV imported.");
+    } finally {
+      setBusy("");
+      event.target.value = "";
+      setImportTarget("");
+      setImportKind("");
+    }
+  };
 
   return (
     <div>
       <Card>
         <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800, color: G, marginBottom: 6 }}>Meeting Library</div>
         <div style={{ fontSize: 14, color: "#7D746C", marginBottom: 12 }}>
-          Save the current event as a reusable snapshot, then reload it later without rebuilding the whole setup.
+          Save the current event as a reusable snapshot, then edit, duplicate, or import CSV data into any saved meeting.
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn amber onClick={onSaveSnapshot}>Save current meeting</Btn>
@@ -1970,32 +2180,68 @@ function MeetingsTab({ meetings, currentEvent, onSaveSnapshot, onLoadSnapshot })
         </div>
       </Card>
 
+      {notice ? <div style={{ background: "#E8F0EC", color: G, borderRadius: 12, padding: "10px 12px", marginBottom: 12, fontSize: 13 }}>{notice}</div> : null}
+
       <Row>
         <SHead>Saved meetings <N n={sortedMeetings.length} /></SHead>
       </Row>
 
-      {sortedMeetings.map((meeting) => (
-        <Card key={meeting.id} border>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 17, fontWeight: 800 }}>{meeting.label || meeting.evtName || "Saved meeting"}</div>
-              <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>
-                {[meeting.evtDate ? fmtDate(meeting.evtDate) : "", meeting.eventCode ? `Code ${meeting.eventCode}` : "", meeting.createdAt ? new Date(meeting.createdAt).toLocaleString() : ""]
-                  .filter(Boolean)
-                  .join(" · ")}
+      <input ref={classFileRef} type="file" accept=".csv,text/csv" onChange={handleClassImport} style={{ display: "none" }} />
+      <input ref={studentFileRef} type="file" accept=".csv,text/csv" onChange={handleStudentImport} style={{ display: "none" }} />
+
+      {sortedMeetings.map((meeting) => {
+        const isEditing = editId === meeting.id;
+        return (
+          <Card key={meeting.id} border={isEditing}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+              <div style={{ flex: 1 }}>
+                {isEditing ? (
+                  <input
+                    value={draftLabel}
+                    onChange={(event) => setDraftLabel(event.target.value)}
+                    onBlur={finishRename}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") finishRename();
+                      if (event.key === "Escape") {
+                        setEditId("");
+                        setDraftLabel("");
+                      }
+                    }}
+                    autoFocus
+                    style={{ ...iBase, marginBottom: 10 }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 17, fontWeight: 800 }}>{meeting.label || meeting.evtName || "Saved meeting"}</div>
+                )}
+                <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>
+                  {[meeting.evtDate ? fmtDate(meeting.evtDate) : "", meeting.eventCode ? `Code ${meeting.eventCode}` : "", meeting.createdAt ? new Date(meeting.createdAt).toLocaleString() : ""]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+                <div style={{ fontSize: 12, color: "#7D746C", marginTop: 8, lineHeight: 1.5 }}>
+                  {meeting.school || DEFAULT_SCHOOL}
+                  {" · "}
+                  {meeting.classes?.length || 0} classes
+                  {" · "}
+                  {meeting.students?.length || 0} students
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "#7D746C", marginTop: 8, lineHeight: 1.5 }}>
-                {meeting.school || DEFAULT_SCHOOL}
-                {" · "}
-                {meeting.classes?.length || 0} classes
-                {" · "}
-                {meeting.students?.length || 0} students
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <Btn onClick={() => onLoadSnapshot(meeting)}>Load</Btn>
+                <Btn light onClick={() => beginRename(meeting)}>Rename</Btn>
+                <Btn light onClick={() => onDuplicateSnapshot(meeting)}>Duplicate</Btn>
+                <Btn light onClick={() => chooseImport(meeting.id, "classes")} disabled={busy === "classes" && importTarget === meeting.id}>
+                  Classes CSV
+                </Btn>
+                <Btn light onClick={() => chooseImport(meeting.id, "students")} disabled={busy === "students" && importTarget === meeting.id}>
+                  Students CSV
+                </Btn>
+                <Btn light onClick={() => onDeleteSnapshot(meeting.id)}>Delete</Btn>
               </div>
             </div>
-            <Btn onClick={() => onLoadSnapshot(meeting)}>Load</Btn>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
 
       {!sortedMeetings.length && (
         <Empty>No saved meetings yet. Save the current meeting to start building a library.</Empty>
