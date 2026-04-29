@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { createClass, getClasses, getMeeting, replaceStudents } from "../../services/meetingService";
+import { createClass, getClasses, getMeeting, replaceStudents, updateClassTeachers } from "../../services/meetingService";
 import {
   CLASS_ROSTER_TEMPLATE_CSV,
   STUDENT_ROSTER_TEMPLATE_CSV,
@@ -150,6 +150,64 @@ export default function AdminMeetingDetail() {
     }
   }
 
+  function updateClassTeacherField(classId, teacherId, field, value) {
+    setClasses((previous) =>
+      previous.map((classItem) => {
+        if (classItem.id !== classId) return classItem;
+        return {
+          ...classItem,
+          teachers: (classItem.teachers || []).map((teacher) =>
+            teacher.id !== teacherId ? teacher : { ...teacher, [field]: value }
+          ),
+        };
+      })
+    );
+  }
+
+  function addTeacherRow(classId) {
+    setClasses((previous) =>
+      previous.map((classItem) => {
+        if (classItem.id !== classId) return classItem;
+        const nextTeachers = Array.isArray(classItem.teachers) ? classItem.teachers : [];
+        return {
+          ...classItem,
+          teachers: [
+            ...nextTeachers,
+            {
+              id: `teacher-${Date.now().toString(36)}`,
+              name: "",
+              subject: "",
+              room: "",
+              floor: "",
+              time: "",
+              status: "active",
+              note: "",
+              order: nextTeachers.length + 1,
+            },
+          ],
+        };
+      })
+    );
+  }
+
+  function removeTeacherRow(classId, teacherId) {
+    setClasses((previous) =>
+      previous.map((classItem) => {
+        if (classItem.id !== classId) return classItem;
+        const nextTeachers = (classItem.teachers || [])
+          .filter((teacher) => teacher.id !== teacherId)
+          .map((teacher, index) => ({ ...teacher, order: index + 1 }));
+        return { ...classItem, teachers: nextTeachers };
+      })
+    );
+  }
+
+  async function saveClassTeachers(classItem) {
+    await updateClassTeachers(meetingId, classItem.id, classItem.teachers || []);
+    setMessage(`${classItem.classLabel || classItem.id} öğretmenleri kaydedildi.`);
+    await refresh();
+  }
+
   const classesById = useMemo(() => new Map(classes.map((classItem) => [classItem.id, classItem])), [classes]);
 
   const classStats = useMemo(
@@ -224,21 +282,64 @@ export default function AdminMeetingDetail() {
 
             <div style={styles.teacherList}>
               {(classItem.teachers || []).map((teacher) => (
-                <div key={teacher.id} style={styles.teacherRow}>
-                  <div>
-                    <strong>{teacher.subject || teacher.name}</strong>
-                    <div style={styles.teacherMeta}>
-                      {teacher.name}
-                      {teacher.room ? ` · ${teacher.room}` : ""}
-                      {teacher.floor ? ` · ${teacher.floor}` : ""}
-                    </div>
+                <div key={teacher.id} style={styles.teacherEditor}>
+                  <div style={styles.teacherGrid}>
+                    <input
+                      value={teacher.name || ""}
+                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "name", event.target.value)}
+                      placeholder="Öğretmen adı"
+                      style={styles.teacherInput}
+                    />
+                    <input
+                      value={teacher.subject || ""}
+                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "subject", event.target.value)}
+                      placeholder="Branş"
+                      style={styles.teacherInput}
+                    />
+                    <input
+                      value={teacher.room || ""}
+                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "room", event.target.value)}
+                      placeholder="Oda"
+                      style={styles.teacherInput}
+                    />
+                    <input
+                      value={teacher.floor || ""}
+                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "floor", event.target.value)}
+                      placeholder="Kat"
+                      style={styles.teacherInput}
+                    />
                   </div>
-                  <span style={teacher.status === "unavailable" ? styles.statusOff : styles.statusOn}>
-                    {teacher.status === "unavailable" ? "İzinli" : "Aktif"}
-                  </span>
+                  <div style={styles.teacherActions}>
+                    <label style={styles.teacherStatus}>
+                      <input
+                        type="checkbox"
+                        checked={teacher.status !== "unavailable"}
+                        onChange={(event) =>
+                          updateClassTeacherField(
+                            classItem.id,
+                            teacher.id,
+                            "status",
+                            event.target.checked ? "active" : "unavailable"
+                          )
+                        }
+                      />
+                      Aktif
+                    </label>
+                    <button type="button" onClick={() => removeTeacherRow(classItem.id, teacher.id)} style={styles.linkButton}>
+                      Öğretmeni kaldır
+                    </button>
+                  </div>
                 </div>
               ))}
               {!classItem.teachers?.length ? <p style={styles.cardText}>Bu sınıfta henüz öğretmen yok.</p> : null}
+              <div style={styles.teacherFooter}>
+                <button type="button" onClick={() => addTeacherRow(classItem.id)} style={styles.secondaryButtonSmall}>
+                  Öğretmen ekle
+                </button>
+                <button type="button" onClick={() => saveClassTeachers(classItem)} style={styles.primaryButtonSmall}>
+                  Öğretmenleri kaydet
+                </button>
+              </div>
             </div>
 
             <div style={styles.studentSummary}>
@@ -357,6 +458,24 @@ const styles = {
     padding: "0.85rem 1rem",
     cursor: "pointer",
   },
+  primaryButtonSmall: {
+    border: "none",
+    borderRadius: 12,
+    background: "#1d4ed8",
+    color: "#fff",
+    fontWeight: 700,
+    padding: "0.7rem 0.9rem",
+    cursor: "pointer",
+  },
+  secondaryButtonSmall: {
+    border: "1px solid #d6d3d1",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#111827",
+    fontWeight: 700,
+    padding: "0.7rem 0.9rem",
+    cursor: "pointer",
+  },
   notice: {
     padding: "0.9rem 1rem",
     borderRadius: 14,
@@ -410,13 +529,53 @@ const styles = {
     display: "grid",
     gap: 10,
   },
-  teacherRow: {
+  teacherEditor: {
+    display: "grid",
+    gap: 10,
+    padding: "0.9rem 0",
+    borderTop: "1px solid #f1f5f9",
+  },
+  teacherGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+  teacherInput: {
+    width: "100%",
+    border: "1px solid #d1d5db",
+    borderRadius: 12,
+    padding: "0.75rem 0.85rem",
+    fontSize: 14,
+    boxSizing: "border-box",
+  },
+  teacherActions: {
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
     alignItems: "center",
-    padding: "0.9rem 0",
-    borderTop: "1px solid #f1f5f9",
+    flexWrap: "wrap",
+  },
+  teacherStatus: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+    color: "#374151",
+  },
+  linkButton: {
+    border: "none",
+    background: "transparent",
+    color: "#1d4ed8",
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: 0,
+  },
+  teacherFooter: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    paddingTop: 4,
   },
   teacherMeta: {
     color: "#6b7280",
