@@ -28,7 +28,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const tempRole = getTemporaryRole(email, password);
-      if (tempRole && import.meta.env.DEV) {
+      if (tempRole && isLocalHost()) {
         await loginAsDemo(tempRole);
         return;
       }
@@ -132,6 +132,12 @@ function getTemporaryRole(email, password) {
   if (value === "admin") return "admin";
   if (value === "staff" || value === "frontdesk") return "frontdesk";
   return null;
+}
+
+function isLocalHost() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 const styles = {
