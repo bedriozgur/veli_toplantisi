@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getUsers } from "../../services/meetingService";
 
 export default function AdminUsers() {

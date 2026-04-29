@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function LoginPage() {
-  const { login, userRole, authLoading } = useAuth();
+  const { login, loginAsDemo, userRole, authLoading, isDemoMode } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname;
@@ -24,7 +24,11 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      if (isDemoMode) {
+        await loginAsDemo(detectDemoRole(email));
+      } else {
+        await login(email.trim(), password);
+      }
     } catch (err) {
       setError(getErrorMessage(err?.code));
     } finally {
@@ -64,9 +68,23 @@ export default function LoginPage() {
           {error ? <p style={styles.error}>{error}</p> : null}
 
           <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? "Giriş yapılıyor…" : "Giriş Yap"}
+            {loading ? "Giriş yapılıyor…" : isDemoMode ? "Demo olarak devam et" : "Giriş Yap"}
           </button>
         </form>
+
+        {isDemoMode ? (
+          <div style={styles.demoBlock}>
+            <p style={styles.demoText}>Firebase ayarlı değil. Yerel geliştirme için demo girişi kullanabilirsiniz.</p>
+            <div style={styles.demoButtons}>
+              <button type="button" onClick={() => loginAsDemo("admin")} style={styles.demoButton}>
+                Demo admin
+              </button>
+              <button type="button" onClick={() => loginAsDemo("frontdesk")} style={styles.demoButtonAlt}>
+                Demo front desk
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <p style={styles.parentNote}>
           Veli misiniz? <Link to="/parent" style={styles.link}>Toplantı kodunuzu girin</Link>
@@ -87,6 +105,12 @@ function getErrorMessage(code) {
     default:
       return "Giriş yapılırken bir hata oluştu.";
   }
+}
+
+function detectDemoRole(email) {
+  const value = String(email || "").toLowerCase();
+  if (value.includes("front")) return "frontdesk";
+  return "admin";
 }
 
 const styles = {
@@ -128,6 +152,34 @@ const styles = {
     cursor: "pointer",
   },
   error: { margin: 0, color: "#b91c1c", fontSize: 14 },
+  demoBlock: {
+    marginTop: 18,
+    padding: 16,
+    borderRadius: 16,
+    background: "#f9fafb",
+    display: "grid",
+    gap: 12,
+  },
+  demoText: { margin: 0, color: "#6b7280", fontSize: 14, lineHeight: 1.5 },
+  demoButtons: { display: "flex", gap: 10, flexWrap: "wrap" },
+  demoButton: {
+    padding: "0.75rem 0.9rem",
+    borderRadius: 12,
+    border: "none",
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  demoButtonAlt: {
+    padding: "0.75rem 0.9rem",
+    borderRadius: 12,
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    color: "#111827",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   parentNote: { marginTop: 18, marginBottom: 0, color: "#6b7280", fontSize: 14 },
   link: { color: "#1d4ed8", textDecoration: "none", fontWeight: 700 },
 };

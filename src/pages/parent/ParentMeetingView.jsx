@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { buildMailtoLink } from "../../utils/accessCode";
 import { getClasses, getStudents, resolveAccessCode, updateTeacherMeeting } from "../../services/meetingService";

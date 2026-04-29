@@ -796,6 +796,7 @@ export default function App() {
     return (
       <>
         <HomeView
+          logoSrc={resolvedLogo}
           cloudReady={cloudReady}
           publishState={publishState}
           onOpenEntrance={openEntranceByCode}
@@ -847,6 +848,7 @@ export default function App() {
 
   return (
     <AdminDashboard
+      logoSrc={resolvedLogo}
       school={school}
       schoolLogo={schoolLogo}
       evtName={evtName}
@@ -884,6 +886,7 @@ export default function App() {
         )}
         {adminTab === "settings" && (
           <SettingsTab
+            logoSrc={resolvedLogo}
             school={school}
             setSchool={setSchool}
             schoolLogo={schoolLogo}
@@ -1049,6 +1052,7 @@ function EntranceView({ data, copyText, copied, openParentView, onBack, language
 }
 
 function HomeView({
+  logoSrc,
   cloudReady,
   publishState,
   onOpenEntrance,
@@ -1091,7 +1095,7 @@ function HomeView({
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.55, textAlign: "center", marginBottom: 8 }}>{topWelcome}</div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginTop: 34, marginBottom: 22 }}>
           <div style={{ width: 168, minHeight: 168, borderRadius: 38, background: "#FFFFFF", border: "1px solid rgba(255,255,255,0.32)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)", marginBottom: 22, overflow: "hidden", padding: 18, boxSizing: "border-box" }}>
-            <img src={resolvedLogo} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            <img src={logoSrc} alt={`${landingSchool} logo`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
           </div>
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 6 }}>{landingSchool}</div>
           <div style={{ fontSize: 18, opacity: 0.92 }}>{landingEvent}</div>
@@ -1170,6 +1174,7 @@ function HomeView({
 }
 
 function AdminDashboard({
+  logoSrc,
   school,
   schoolLogo,
   evtName,
@@ -1207,7 +1212,7 @@ function AdminDashboard({
         </div>
         <div style={{ fontSize: 10, letterSpacing: 4, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>Staff Dashboard</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-          <img src={resolvedLogo} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
+          <img src={logoSrc} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
           <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school}</div>
         </div>
         <div style={{ fontSize: 15, opacity: 0.88 }}>{evtName}</div>
@@ -1272,6 +1277,7 @@ function AdminDashboard({
 }
 
 function SettingsTab({
+  logoSrc,
   school,
   setSchool,
   schoolLogo,
@@ -1331,7 +1337,7 @@ function SettingsTab({
       <div style={{ background: "white", borderRadius: 16, padding: "16px 18px", marginBottom: 18, boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
         <SLabel>Event Details</SLabel>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <img src={resolvedLogo} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box" }} />
+          <img src={logoSrc} alt={`${school} logo`} style={{ width: 56, height: 56, borderRadius: 16, objectFit: "contain", background: "#F5F0E8", padding: 6, boxSizing: "border-box" }} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn light onClick={() => logoInputRef.current?.click()}>Upload logo</Btn>
             {schoolLogo && <Btn light onClick={() => setSchoolLogo("")}>Remove logo</Btn>}

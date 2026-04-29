@@ -1,4 +1,5 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { resolveAccessCode } from "../../services/meetingService";
 
@@ -35,6 +36,9 @@ export default function ParentCodeEntry() {
         <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="5A-X7K2" style={styles.input} />
         {error ? <p style={styles.error}>{error}</p> : null}
         <button disabled={loading} style={styles.button}>{loading ? "Kontrol ediliyor…" : "Devam et"}</button>
+        <p style={styles.footer}>
+          Personel misiniz? <Link to="/login" style={styles.link}>Yönetim girişine gidin</Link>
+        </p>
       </form>
     </div>
   );
@@ -91,4 +95,6 @@ const styles = {
     cursor: "pointer",
   },
   error: { margin: 0, color: "#b91c1c" },
+  footer: { margin: 0, color: "#6b7280", fontSize: 14 },
+  link: { color: "#1d4ed8", fontWeight: 700, textDecoration: "none" },
 };
