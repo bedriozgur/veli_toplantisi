@@ -159,6 +159,9 @@ export function AuthProvider({ children }) {
 
   const loginAsDemo = useCallback(async (role = "admin") => {
     setDemoStoreForced(true);
+    if (!hasFullSchoolSeed()) {
+      seedDemoSchoolData({ replace: true });
+    }
     const normalizedRole = role === "frontdesk" ? "frontdesk" : "admin";
     const demo = {
       uid: `demo-${normalizedRole}`,
