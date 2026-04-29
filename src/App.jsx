@@ -42,6 +42,7 @@ const STORAGE_KEY = "pe_admin_v2";
 const PARENT_KEY_PREFIX = "pe_parent_v2:";
 const ADMIN_PIN_KEY = "pe_admin_pin";
 const ADMIN_UNLOCK_KEY = "pe_admin_unlock";
+const MEETING_LIBRARY_KEY = "pe_meeting_library_v1";
 
 const iBase = {
   width: "100%",
@@ -99,6 +100,16 @@ function safeGetStorage(key) {
     return localStorage.getItem(key);
   } catch {
     return null;
+  }
+}
+
+function safeParseStorage(key, fallback) {
+  try {
+    const raw = safeGetStorage(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
   }
 }
 
@@ -167,6 +178,34 @@ function buildParentPayload(source, student) {
   };
 }
 
+function loadMeetingLibrary() {
+  const parsed = safeParseStorage(MEETING_LIBRARY_KEY, []);
+  return Array.isArray(parsed)
+    ? parsed.filter(Boolean).map((item) => ({
+        id: item.id || createId(),
+        label: item.label || item.evtName || "Saved meeting",
+        createdAt: item.createdAt || new Date().toISOString(),
+        ...buildEventPayload({
+          school: item.school || DEFAULT_SCHOOL,
+          schoolLogo: item.schoolLogo || "",
+          evtName: item.evtName || DEFAULT_EVENT,
+          evtDate: item.evtDate || "",
+          startTime: item.startTime || DEFAULT_START_TIME,
+          endTime: item.endTime || DEFAULT_END_TIME,
+          notesEmail: item.notesEmail || DEFAULT_NOTES_EMAIL,
+          eventCode: item.eventCode || makeEventCode(),
+          eventStatus: item.eventStatus || DEFAULT_EVENT_STATUS,
+          expiresAt: item.expiresAt || "",
+          landingHelpText: item.landingHelpText || DEFAULT_LANDING_HELP,
+          landingNoteText: item.landingNoteText || DEFAULT_LANDING_NOTE,
+          teachers: normalizeTeachers(item.teachers || []),
+          classes: normalizeClasses(item.classes || []),
+          students: normalizeStudents(item.students || []),
+        }),
+      }))
+    : [];
+}
+
 export default function App() {
   const [mode, setMode] = useState(null);
   const [bootError, setBootError] = useState("");
@@ -185,6 +224,7 @@ export default function App() {
   const [expiresAt, setExpiresAt] = useState("");
   const [landingHelpText, setLandingHelpText] = useState(DEFAULT_LANDING_HELP);
   const [landingNoteText, setLandingNoteText] = useState(DEFAULT_LANDING_NOTE);
+  const [meetingLibrary, setMeetingLibrary] = useState([]);
 
   const [teachers, setTeachers] = useState(normalizeAdminState().teachers);
   const [classes, setClasses] = useState(normalizeAdminState().classes);
@@ -300,7 +340,9 @@ export default function App() {
           setTeachers(state.teachers);
           setClasses(state.classes);
           setStudents(state.students);
+          setMeetingLibrary(loadMeetingLibrary());
         }
+        if (!saved) setMeetingLibrary(loadMeetingLibrary());
 
         setMode("home");
       } catch (error) {
@@ -383,6 +425,10 @@ export default function App() {
     classes,
     students,
   ]);
+
+  useEffect(() => {
+    safeSetStorage(MEETING_LIBRARY_KEY, JSON.stringify(meetingLibrary));
+  }, [meetingLibrary]);
 
   const resolvedLogo = schoolLogo || logoImg;
 
@@ -605,6 +651,7 @@ export default function App() {
     setTeachers(defaults.teachers);
     setClasses(defaults.classes);
     setStudents(defaults.students);
+    setMeetingLibrary([]);
     setPublishState("");
     try {
       localStorage.clear();
@@ -638,6 +685,39 @@ export default function App() {
     setTeachers(state.teachers);
     setClasses(state.classes);
     setStudents(state.students);
+  };
+
+  const saveMeetingSnapshot = () => {
+    const snapshot = {
+      id: createId(),
+      label: `${evtName || DEFAULT_EVENT}${evtDate ? ` · ${evtDate}` : ""}`,
+      createdAt: new Date().toISOString(),
+      ...currentEvent,
+    };
+    setMeetingLibrary((previous) => [snapshot, ...previous.filter((item) => item.eventCode !== snapshot.eventCode)]);
+    setPublishState("Meeting snapshot saved");
+  };
+
+  const loadMeetingSnapshot = (snapshot) => {
+    if (!snapshot) return;
+    setSchool(snapshot.school || DEFAULT_SCHOOL);
+    setSchoolLogo(snapshot.schoolLogo || "");
+    setEvtName(snapshot.evtName || DEFAULT_EVENT);
+    setEvtDate(snapshot.evtDate || "");
+    setStartTime(snapshot.startTime || DEFAULT_START_TIME);
+    setEndTime(snapshot.endTime || DEFAULT_END_TIME);
+    setNotesEmail(snapshot.notesEmail || DEFAULT_NOTES_EMAIL);
+    setEventCode(snapshot.eventCode || makeEventCode());
+    setEventStatus(snapshot.eventStatus || DEFAULT_EVENT_STATUS);
+    setExpiresAt(snapshot.expiresAt || "");
+    setLandingHelpText(snapshot.landingHelpText || DEFAULT_LANDING_HELP);
+    setLandingNoteText(snapshot.landingNoteText || DEFAULT_LANDING_NOTE);
+    setTeachers(normalizeTeachers(snapshot.teachers || []));
+    setClasses(normalizeClasses(snapshot.classes || []));
+    setStudents(normalizeStudents(snapshot.students || []));
+    setAdminTab("settings");
+    setPublishState("Meeting snapshot loaded");
+    goHome();
   };
 
   const sendEmail = () => {
@@ -912,6 +992,14 @@ export default function App() {
       setLanguage={setLanguage}
     >
       <div style={{ padding: "18px 16px 120px" }}>
+        {adminTab === "meetings" && (
+          <MeetingsTab
+            meetings={meetingLibrary}
+            currentEvent={currentEvent}
+            onSaveSnapshot={saveMeetingSnapshot}
+            onLoadSnapshot={loadMeetingSnapshot}
+          />
+        )}
         {adminTab === "teachers" && (
           <TeachersTab
             teachers={teachers}
@@ -1308,7 +1396,7 @@ function AdminDashboard({
       </div>
 
       <div style={{ display: "flex", background: "#EEE7DD", padding: 6, gap: 6, margin: "14px 16px 0", borderRadius: 16 }}>
-        {[["settings", "Settings"], ["teachers", "Teachers"], ["classes", "Classes"], ["students", "Families & QR"]].map(([tab, label]) => (
+        {[["settings", "Settings"], ["meetings", "Meetings"], ["teachers", "Teachers"], ["classes", "Classes"], ["students", "Families & QR"]].map(([tab, label]) => (
           <button
             key={tab}
             onClick={() => setAdminTab(tab)}
@@ -1862,6 +1950,56 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function MeetingsTab({ meetings, currentEvent, onSaveSnapshot, onLoadSnapshot }) {
+  const sortedMeetings = Array.isArray(meetings) ? meetings : [];
+
+  return (
+    <div>
+      <Card>
+        <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 20, fontWeight: 800, color: G, marginBottom: 6 }}>Meeting Library</div>
+        <div style={{ fontSize: 14, color: "#7D746C", marginBottom: 12 }}>
+          Save the current event as a reusable snapshot, then reload it later without rebuilding the whole setup.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn amber onClick={onSaveSnapshot}>Save current meeting</Btn>
+          <Btn light onClick={() => onLoadSnapshot(currentEvent)}>Reload current state</Btn>
+        </div>
+      </Card>
+
+      <Row>
+        <SHead>Saved meetings <N n={sortedMeetings.length} /></SHead>
+      </Row>
+
+      {sortedMeetings.map((meeting) => (
+        <Card key={meeting.id} border>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>{meeting.label || meeting.evtName || "Saved meeting"}</div>
+              <div style={{ fontSize: 13, color: "#9A9A9A", marginTop: 3 }}>
+                {[meeting.evtDate ? fmtDate(meeting.evtDate) : "", meeting.eventCode ? `Code ${meeting.eventCode}` : "", meeting.createdAt ? new Date(meeting.createdAt).toLocaleString() : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+              <div style={{ fontSize: 12, color: "#7D746C", marginTop: 8, lineHeight: 1.5 }}>
+                {meeting.school || DEFAULT_SCHOOL}
+                {" · "}
+                {meeting.classes?.length || 0} classes
+                {" · "}
+                {meeting.students?.length || 0} students
+              </div>
+            </div>
+            <Btn onClick={() => onLoadSnapshot(meeting)}>Load</Btn>
+          </div>
+        </Card>
+      ))}
+
+      {!sortedMeetings.length && (
+        <Empty>No saved meetings yet. Save the current meeting to start building a library.</Empty>
+      )}
     </div>
   );
 }
