@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db, doc, getDoc, isFirebaseConfigured } from "../firebase";
-import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/meetingService";
+import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/demoSeed";
 
 const AuthContext = createContext(null);
 const DEMO_STORAGE_KEY = "veli_toplantisi_demo_user";
