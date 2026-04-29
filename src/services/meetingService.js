@@ -859,6 +859,27 @@ export async function markArrived(meetingId, classId, studentId, frontdeskUid) {
   });
 }
 
+export async function unmarkArrived(meetingId, classId, studentId) {
+  if (!hasFirestore()) {
+    updateDemoStore((store) => {
+      const student = store.studentsByMeeting?.[meetingId]?.[classId]?.find((item) => item.id === studentId);
+      if (student) {
+        student.arrivedAt = null;
+        student.arrivedMarkedBy = null;
+        student.updatedAt = nowIso();
+      }
+      return store;
+    });
+    return;
+  }
+
+  await updateDoc(doc(ensureDb(), "meetings", meetingId, "classes", classId, "students", studentId), {
+    arrivedAt: null,
+    arrivedMarkedBy: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function updateTeacherMeeting(meetingId, classId, studentId, teacherId, update) {
   if (!hasFirestore()) {
     updateDemoStore((store) => {

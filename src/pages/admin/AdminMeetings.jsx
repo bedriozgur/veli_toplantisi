@@ -18,14 +18,14 @@ export default function AdminMeetings() {
           <h2 style={styles.h2}>{t("admin.meetings")}</h2>
           <p style={styles.text}>{t("admin.meetingsDescription")}</p>
         </div>
-        <span style={styles.count}>{meetings.length} kayıt</span>
+        <span style={styles.count}>{t("admin.recordCount").replace("{count}", String(meetings.length))}</span>
       </div>
       <div style={styles.list}>
         {meetings.map((meeting) => (
           <Link key={meeting.id} to={`/admin/meetings/${meeting.id}`} style={styles.linkItem}>
             <div>
               <strong>{meeting.title}</strong>
-              <div style={styles.sub}>{meeting.date || "Tarih yok"} · {meeting.status}</div>
+              <div style={styles.sub}>{meeting.date || t("admin.meetingDateMissing")} · {meeting.status}</div>
             </div>
             <span style={styles.go}>{t("admin.open")}</span>
           </Link>

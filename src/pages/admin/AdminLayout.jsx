@@ -14,7 +14,7 @@ export default function AdminLayout() {
       <aside style={styles.sidebar}>
         <div>
           <h1 style={styles.brand}>{t("admin.dashboard")}</h1>
-          <p style={styles.meta}>{userProfile?.displayName || "Admin"}</p>
+          <p style={styles.meta}>{userProfile?.displayName || t("admin.adminLabel")}</p>
         </div>
 
         <nav style={styles.nav}>
@@ -23,7 +23,7 @@ export default function AdminLayout() {
           <NavLink to="/admin/users" style={navStyle}>{t("admin.users")}</NavLink>
         </nav>
 
-        <button onClick={logout} style={styles.logout}>Çıkış Yap</button>
+        <button onClick={logout} style={styles.logout}>{t("admin.logout")}</button>
       </aside>
 
       <main style={styles.main}>

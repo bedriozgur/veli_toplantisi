@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { getClasses, getMeetings, getStudents, markArrived } from "../../services/meetingService";
+import { getClasses, getMeetings, getStudents, markArrived, unmarkArrived } from "../../services/meetingService";
 import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function FrontDeskHome() {
@@ -63,21 +63,39 @@ export default function FrontDeskHome() {
     const key = `${result.meeting.id}:${result.classItem.id}:${result.student.id}`;
     setMarkingKey(key);
     try {
-      await markArrived(result.meeting.id, result.classItem.id, result.student.id, currentUser?.uid || "frontdesk");
-      setResults((prev) =>
-        prev.map((item) =>
-          item.kind !== "student" || item.meeting.id !== result.meeting.id || item.classItem.id !== result.classItem.id || item.student.id !== result.student.id
-            ? item
-            : {
-                ...item,
-                student: {
-                  ...item.student,
-                  arrivedAt: new Date().toISOString(),
-                  arrivedMarkedBy: currentUser?.uid || "frontdesk",
-                },
-              }
-        )
-      );
+      if (result.student.arrivedAt) {
+        await unmarkArrived(result.meeting.id, result.classItem.id, result.student.id);
+        setResults((prev) =>
+          prev.map((item) =>
+            item.kind !== "student" || item.meeting.id !== result.meeting.id || item.classItem.id !== result.classItem.id || item.student.id !== result.student.id
+              ? item
+              : {
+                  ...item,
+                  student: {
+                    ...item.student,
+                    arrivedAt: null,
+                    arrivedMarkedBy: null,
+                  },
+                }
+          )
+        );
+      } else {
+        await markArrived(result.meeting.id, result.classItem.id, result.student.id, currentUser?.uid || "frontdesk");
+        setResults((prev) =>
+          prev.map((item) =>
+            item.kind !== "student" || item.meeting.id !== result.meeting.id || item.classItem.id !== result.classItem.id || item.student.id !== result.student.id
+              ? item
+              : {
+                  ...item,
+                  student: {
+                    ...item.student,
+                    arrivedAt: new Date().toISOString(),
+                    arrivedMarkedBy: currentUser?.uid || "frontdesk",
+                  },
+                }
+          )
+        );
+      }
     } finally {
       setMarkingKey("");
     }
@@ -154,15 +172,14 @@ export default function FrontDeskHome() {
                     {result.student.parentPhone ? <span style={styles.phoneBadge}>{result.student.parentPhone}</span> : null}
                   </div>
                 </div>
-                <button
+                  <button
                   style={styles.smallButton}
                   onClick={() => handleMarkArrived(result)}
-                  disabled={Boolean(result.student.arrivedAt) && markingKey !== `${result.meeting.id}:${result.classItem.id}:${result.student.id}`}
                 >
                   {markingKey === `${result.meeting.id}:${result.classItem.id}:${result.student.id}`
                     ? t("parent.sending")
                     : result.student.arrivedAt
-                      ? t("frontDesk.arrived")
+                      ? t("frontDesk.undo")
                       : t("frontDesk.arrived")}
                 </button>
               </>

@@ -107,8 +107,8 @@ export default function AdminDashboard() {
                 style={styles.meetingItem}
               >
                 <div>
-                  <strong>{meeting.title}</strong>
-                  <div style={styles.sub}>{meeting.date || "Tarih yok"} · {meeting.status}</div>
+              <strong>{meeting.title}</strong>
+                  <div style={styles.sub}>{meeting.date || t("admin.meetingDateMissing")} · {meeting.status}</div>
                 </div>
                 <span style={styles.link}>{t("admin.open")}</span>
               </button>

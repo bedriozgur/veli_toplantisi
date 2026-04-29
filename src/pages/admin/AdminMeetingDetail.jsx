@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 import {
   createClass,
   createRoom,
@@ -24,6 +25,7 @@ import {
 export default function AdminMeetingDetail() {
   const { meetingId } = useParams();
   const { currentUser } = useAuth();
+  const { t } = useLanguage();
   const classFileRef = useRef(null);
   const studentFileRef = useRef(null);
   const [meeting, setMeeting] = useState(null);
@@ -54,7 +56,7 @@ export default function AdminMeetingDetail() {
       setMeeting(null);
       setClasses([]);
       setRooms([]);
-      setError("Toplantı yüklenemedi.");
+      setError(t("admin.detailNoMeeting"));
     }
   }
 
@@ -71,7 +73,7 @@ export default function AdminMeetingDetail() {
       const roster = buildClassRosterPayload(parsed);
 
       if (!roster.length) {
-        setMessage("CSV içinde sınıf kaydı bulunamadı.");
+        setMessage(t("admin.detailCsvClassEmpty"));
         return;
       }
 
@@ -93,10 +95,10 @@ export default function AdminMeetingDetail() {
         );
       }
 
-      setMessage(`${roster.length} sınıf CSV'den içe aktarıldı.`);
+      setMessage(t("admin.detailClassImported").replace("{count}", String(roster.length)));
       await refresh();
     } catch (err) {
-      setError(err?.message || "Sınıf CSV içe aktarımı başarısız oldu.");
+      setError(err?.message || t("app.error"));
     } finally {
       setBusy("");
       event.target.value = "";
@@ -115,7 +117,7 @@ export default function AdminMeetingDetail() {
       const parsed = parseStudentRosterCsv(text);
 
       if (!parsed.length) {
-        setMessage("CSV içinde öğrenci kaydı bulunamadı.");
+        setMessage(t("admin.detailCsvStudentEmpty"));
         return;
       }
 
@@ -156,12 +158,14 @@ export default function AdminMeetingDetail() {
 
       setMessage(
         skipped > 0
-          ? `${imported} öğrenci içe aktarıldı, ${skipped} satır eşleşen sınıf bulamadığı için atlandı.`
-          : `${imported} öğrenci içe aktarıldı.`
+          ? t("admin.detailStudentImportedSkipped")
+              .replace("{imported}", String(imported))
+              .replace("{skipped}", String(skipped))
+          : t("admin.detailStudentImported").replace("{count}", String(imported))
       );
       await refresh();
     } catch (err) {
-      setError(err?.message || "Öğrenci CSV içe aktarımı başarısız oldu.");
+      setError(err?.message || t("app.error"));
     } finally {
       setBusy("");
       event.target.value = "";
@@ -190,7 +194,7 @@ export default function AdminMeetingDetail() {
 
   async function saveRoom(room) {
     await updateRoom(meetingId, room.id, room);
-    setMessage(`${room.name || "Oda"} kaydedildi.`);
+    setMessage(t("admin.detailRoomSaved").replace("{name}", room.name || t("admin.detailRoomName")));
     await refresh();
   }
 
@@ -199,13 +203,13 @@ export default function AdminMeetingDetail() {
     if (!name) return;
     await createRoom(meetingId, { name, floor: roomDraft.floor || "" });
     setRoomDraft({ name: "", floor: "" });
-    setMessage(`${name} eklendi.`);
+    setMessage(t("admin.detailRoomAdded").replace("{name}", name));
     await refresh();
   }
 
   async function removeRoom(roomId) {
     await deleteRoom(meetingId, roomId);
-    setMessage("Oda silindi.");
+    setMessage(t("admin.detailRoomDeleted"));
     await refresh();
   }
 
@@ -249,7 +253,7 @@ export default function AdminMeetingDetail() {
 
   async function saveClassTeachers(classItem) {
     await updateClassTeachers(meetingId, classItem.id, classItem.teachers || []);
-    setMessage(`${classItem.classLabel || classItem.id} öğretmenleri kaydedildi.`);
+    setMessage(t("admin.detailTeachersSaved").replace("{className}", classItem.classLabel || classItem.id));
     await refresh();
   }
 
@@ -265,27 +269,27 @@ export default function AdminMeetingDetail() {
   );
 
   if (!meeting) {
-    return <div style={styles.card}>{error || "Toplantı yükleniyor…"}</div>;
+    return <div style={styles.card}>{error || t("admin.detailLoading")}</div>;
   }
 
   return (
     <div style={styles.page}>
       <section style={styles.hero}>
         <div>
-          <div style={styles.badge}>Toplantı Detayı</div>
+          <div style={styles.badge}>{t("admin.detailBadge")}</div>
           <h2 style={styles.title}>{meeting.title}</h2>
           <p style={styles.text}>
-            {meeting.date || "Tarih belirtilmedi"} · {meeting.status || "draft"} · {classStats.length} sınıf
+            {meeting.date || t("admin.detailDateMissing")} · {meeting.status || "draft"} · {classStats.length} {t("admin.detailClassCount")}
           </p>
         </div>
 
         <div style={styles.heroMeta}>
           <div style={styles.metaCard}>
-            <span style={styles.metaLabel}>Yetkili</span>
-            <strong>{currentUser?.email || "Firebase oturumu"}</strong>
+            <span style={styles.metaLabel}>{t("admin.detailRole")}</span>
+            <strong>{currentUser?.email || t("admin.detailSession")}</strong>
           </div>
           <div style={styles.metaCard}>
-            <span style={styles.metaLabel}>Toplam sınıf</span>
+            <span style={styles.metaLabel}>{t("admin.detailClassCount")}</span>
             <strong>{classStats.length}</strong>
           </div>
         </div>
@@ -293,16 +297,16 @@ export default function AdminMeetingDetail() {
 
       <section style={styles.toolbar}>
         <button onClick={() => downloadTextFile("class-roster-template.csv", CLASS_ROSTER_TEMPLATE_CSV, "text/csv;charset=utf-8;")} style={styles.secondaryButton}>
-          Sınıf şablonu indir
+          {t("admin.detailClassCsv")}
         </button>
         <button onClick={() => classFileRef.current?.click()} style={styles.primaryButton} disabled={busy === "class"}>
-          {busy === "class" ? "Sınıflar içe aktarılıyor…" : "Sınıf CSV yükle"}
+          {busy === "class" ? t("admin.detailUploadingClass") : t("admin.detailUploadClass")}
         </button>
         <button onClick={() => downloadTextFile("student-roster-template.csv", STUDENT_ROSTER_TEMPLATE_CSV, "text/csv;charset=utf-8;")} style={styles.secondaryButton}>
-          Öğrenci şablonu indir
+          {t("admin.detailStudentCsv")}
         </button>
         <button onClick={() => studentFileRef.current?.click()} style={styles.primaryButton} disabled={busy === "student"}>
-          {busy === "student" ? "Öğrenciler içe aktarılıyor…" : "Öğrenci CSV yükle"}
+          {busy === "student" ? t("admin.detailUploadingStudent") : t("admin.detailUploadStudent")}
         </button>
       </section>
 
@@ -315,24 +319,24 @@ export default function AdminMeetingDetail() {
       <section style={styles.roomCard}>
         <div style={styles.roomHead}>
           <div>
-            <h3 style={styles.cardTitle}>Odalar</h3>
-            <p style={styles.cardText}>Odaları burada tanımlayın. Öğretmenler sınıflardan ayrı oda seçer.</p>
+            <h3 style={styles.cardTitle}>{t("admin.detailRoomSection")}</h3>
+            <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
           </div>
           <div style={styles.roomAddRow}>
             <input
               value={roomDraft.name}
               onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="Oda adı"
+              placeholder={t("admin.detailRoomName")}
               style={styles.teacherInput}
             />
             <input
               value={roomDraft.floor}
               onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
-              placeholder="Kat"
+              placeholder={t("admin.detailFloor")}
               style={styles.teacherInput}
             />
             <button type="button" onClick={addRoom} style={styles.primaryButtonSmall}>
-              Oda ekle
+              {t("admin.detailAddRoom")}
             </button>
           </div>
         </div>
@@ -342,24 +346,24 @@ export default function AdminMeetingDetail() {
               <input
                 value={room.name || ""}
                 onChange={(event) => updateRoomField(room.id, "name", event.target.value)}
-                placeholder="Oda adı"
+                placeholder={t("admin.detailRoomName")}
                 style={styles.teacherInput}
               />
               <input
                 value={room.floor || ""}
                 onChange={(event) => updateRoomField(room.id, "floor", event.target.value)}
-                placeholder="Kat"
+                placeholder={t("admin.detailFloor")}
                 style={styles.teacherInput}
               />
               <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
-                Kaydet
+                {t("admin.detailSaveRoom")}
               </button>
               <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
-                Sil
+                {t("admin.detailDeleteRoom")}
               </button>
             </div>
           ))}
-          {!rooms.length ? <p style={styles.cardText}>Henüz oda tanımlanmadı.</p> : null}
+          {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
         </div>
       </section>
 
@@ -370,10 +374,10 @@ export default function AdminMeetingDetail() {
               <div>
                 <h3 style={styles.cardTitle}>{classItem.classLabel || classItem.id}</h3>
                 <p style={styles.cardText}>
-                  Kod: <strong>{classItem.accessCode || "yok"}</strong>
+                  {t("admin.detailClassCode")}: <strong>{classItem.accessCode || t("admin.detailNone")}</strong>
                 </p>
               </div>
-              <span style={styles.pill}>{classItem.studentCount} öğrenci</span>
+              <span style={styles.pill}>{classItem.studentCount} {t("admin.detailStudentList")}</span>
             </div>
 
             <div style={styles.teacherList}>
@@ -383,13 +387,13 @@ export default function AdminMeetingDetail() {
                     <input
                       value={teacher.name || ""}
                       onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "name", event.target.value)}
-                      placeholder="Öğretmen adı"
+                      placeholder={t("admin.detailTeacherName")}
                       style={styles.teacherInput}
                     />
                     <input
                       value={teacher.subject || ""}
                       onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "subject", event.target.value)}
-                      placeholder="Branş"
+                      placeholder={t("admin.detailTeacherSubject")}
                       style={styles.teacherInput}
                     />
                     <input
@@ -415,7 +419,7 @@ export default function AdminMeetingDetail() {
                           })
                         );
                       }}
-                      placeholder="Oda"
+                      placeholder={t("admin.detailTeacherRoom")}
                       style={styles.teacherInput}
                       list={`room-list-${classItem.id}`}
                     />
@@ -429,7 +433,7 @@ export default function AdminMeetingDetail() {
                     <input
                       value={teacher.floor || ""}
                       onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "floor", event.target.value)}
-                      placeholder="Kat"
+                      placeholder={t("admin.detailTeacherFloor")}
                       style={styles.teacherInput}
                     />
                   </div>
@@ -447,33 +451,33 @@ export default function AdminMeetingDetail() {
                           )
                         }
                       />
-                      Aktif
+                      {teacher.status !== "unavailable" ? t("admin.detailTeacherActive") : t("admin.detailTeacherInactive")}
                     </label>
                     <button type="button" onClick={() => removeTeacherRow(classItem.id, teacher.id)} style={styles.linkButton}>
-                      Öğretmeni kaldır
+                      {t("admin.detailTeacherRemove")}
                     </button>
                   </div>
                 </div>
               ))}
-              {!classItem.teachers?.length ? <p style={styles.cardText}>Bu sınıfta henüz öğretmen yok.</p> : null}
+              {!classItem.teachers?.length ? <p style={styles.cardText}>{t("admin.detailNoTeachers")}</p> : null}
               <div style={styles.teacherFooter}>
                 <button type="button" onClick={() => addTeacherRow(classItem.id)} style={styles.secondaryButtonSmall}>
-                  Öğretmen ekle
+                  {t("admin.detailTeacherAdd")}
                 </button>
                 <button type="button" onClick={() => saveClassTeachers(classItem)} style={styles.primaryButtonSmall}>
-                  Öğretmenleri kaydet
+                  {t("admin.detailTeacherSave")}
                 </button>
               </div>
             </div>
 
             <div style={styles.studentSummary}>
-              <span>Öğrenci listesi</span>
+              <span>{t("admin.detailStudentList")}</span>
               <span>{classesById.get(classItem.id)?.stats?.totalStudents || 0}</span>
             </div>
           </article>
         ))}
 
-        {!classStats.length ? <div style={styles.card}>Henüz sınıf yok. CSV ile sınıf ekleyin.</div> : null}
+        {!classStats.length ? <div style={styles.card}>{t("admin.detailNoClasses")}</div> : null}
       </section>
     </div>
   );

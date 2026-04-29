@@ -83,7 +83,7 @@ export default function ParentMeetingView() {
   const mailto = selectedStudent
     ? buildMailtoLink({
         studentName: selectedStudent.studentName,
-        meetingTitle: access.meetingTitle || "Veli Toplantısı",
+        meetingTitle: access.meetingTitle || t("login.title"),
         date: access.meetingDate || "",
         teachers: classItem.teachers || [],
         meetings: drafts,
@@ -130,7 +130,7 @@ export default function ParentMeetingView() {
                             [teacher.id]: { ...prev[teacher.id], visited: e.target.checked },
                           }))}
                         />
-                        {t("frontDesk.arrived")}
+                        {t("parent.visited")}
                       </label>
                     </div>
                     <textarea

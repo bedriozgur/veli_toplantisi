@@ -17,7 +17,7 @@ export default function AdminUsers() {
           <h2 style={styles.h2}>{t("admin.users")}</h2>
           <p style={styles.text}>{t("admin.usersDescription")}</p>
         </div>
-        <span style={styles.count}>{users.length} kişi</span>
+        <span style={styles.count}>{t("admin.personCount").replace("{count}", String(users.length))}</span>
       </div>
       <div style={styles.list}>
         {users.map((user) => (
