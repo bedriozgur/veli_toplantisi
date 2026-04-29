@@ -588,7 +588,7 @@ function buildTeacherSummary(teacher, t) {
   const subject = teacher.subject || t("admin.detailTeacherSubject");
   const locationParts = [teacher.floor || "", teacher.room || ""].filter(Boolean);
   const location = locationParts.length ? locationParts.join(" - ") : t("admin.detailTeacherLocation");
-  const classCount = `${(teacher.classIds || []).length} Sınıf`;
+  const classCount = `${(teacher.classIds || []).length} ${t("admin.detailClassUnit")}`;
   return [subject, location, classCount].join(" · ");
 }
 
