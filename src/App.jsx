@@ -26,6 +26,7 @@ import {
   normalizeEventName,
   normalizeSchoolName,
 } from "./config/eventConfig";
+import { t } from "./i18n/messages";
 import {
   CLASS_TEMPLATE_CSV,
   downloadTextFile,
@@ -1391,14 +1392,14 @@ function HomeView({
   setLanguage,
 }) {
   const statusLabel = cloudReady
-    ? publishState || "Enter the meeting code from the school to open your meeting plan."
-    : "Cloud event lookup is unavailable on this build.";
-  const landingSchool = school || "TED Bursa Koleji";
-  const landingEvent = evtName || "Veli Toplantısı Portalı";
-  const topWelcome = language === "tr" ? "Okul Toplantı Portalına Hoş Geldiniz" : "Welcome to the School Meeting Portal";
-  const entryPrompt = language === "tr" ? "Toplantı kodunuzu girin" : "Enter your meeting code";
-  const loginLabel = language === "tr" ? "Toplantı Portalına Giriş" : "Login to the Meeting Portal";
-  const howToStartLabel = language === "tr" ? "Nasıl Yapılır" : "How it is Done";
+    ? publishState || t(language, "app.helpFallback")
+    : t(language, "app.helpFallback");
+  const landingSchool = school || t(language, "app.schoolFallback");
+  const landingEvent = evtName || t(language, "app.eventFallback");
+  const topWelcome = t(language, "app.welcome");
+  const entryPrompt = t(language, "app.enterCode");
+  const loginLabel = t(language, "app.login");
+  const howToStartLabel = t(language, "app.howItWorks");
   const langButtonLabel = language === "tr" ? "EN" : "TR";
 
   return (
@@ -1464,7 +1465,7 @@ function HomeView({
             {landingHelpText || statusLabel}
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6, color: "#75695E" }}>
-            {landingNoteText || "Parents can scan the printed QR code or enter the meeting code provided by the school."}
+            {landingNoteText || t(language, "app.parentNote")}
           </div>
 
         </Card>
@@ -2424,14 +2425,14 @@ function FrontDeskView({ logoSrc, school, schoolLogo, evtName, evtDate, startTim
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <img src={logoSrc || schoolLogo || logoImg} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
-          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school || "Front desk"}</div>
+          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school || t(language, "app.frontDesk")}</div>
         </div>
-        <div style={{ fontSize: 15, opacity: 0.88 }}>Geliş kaydı ve hızlı sınıf arama</div>
+        <div style={{ fontSize: 15, opacity: 0.88 }}>{t(language, "frontDesk.title")}</div>
         <div style={{ fontSize: 12, opacity: 0.58, marginTop: 4 }}>
           {[evtDate ? fmtDate(evtDate) : "", fmtEventWindow(startTime, endTime), evtName || ""].filter(Boolean).join(" · ")}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 18, marginBottom: 4 }}>
-          {[
+            {[
             { label: "Students", value: students.length },
             { label: "Arrived", value: arrivedCount },
             { label: "Waiting", value: waitingCount },
@@ -2446,11 +2447,11 @@ function FrontDeskView({ logoSrc, school, schoolLogo, evtName, evtDate, startTim
 
       <div style={{ padding: "14px 16px 20px" }}>
         <Card>
-          <SLabel>Search</SLabel>
+          <SLabel>{t(language, "frontDesk.search")}</SLabel>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Student, parent, or class"
+            placeholder={t(language, "frontDesk.search")}
             style={{ ...iBase, marginBottom: 10 }}
           />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -2531,13 +2532,13 @@ function LoadingScreen({ label, language, setLanguage }) {
   return (
     <div style={{ minHeight: "100vh", background: CR, display: "flex", alignItems: "center", justifyContent: "center", color: G, fontFamily: "'DM Sans',sans-serif", position: "relative" }}>
       <LanguageToggle language={language} setLanguage={setLanguage} dark={false} />
-      {label}...
+      {label || t(language, "app.loading")}
     </div>
   );
 }
 
 function ErrorScreen({ message, language, setLanguage }) {
-  return <div style={{ minHeight: "100vh", background: CR, padding: 24, color: G, fontFamily: "'DM Sans',sans-serif" }}><div style={{ maxWidth: 720, margin: "0 auto" }}><div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.6, marginBottom: 10 }}>App Error</div><h1 style={{ margin: "0 0 12px", fontSize: 28 }}>The app could not open this event</h1><p style={{ margin: 0, lineHeight: 1.5 }}>{message}</p></div></div>;
+  return <div style={{ minHeight: "100vh", background: CR, padding: 24, color: G, fontFamily: "'DM Sans',sans-serif" }}><div style={{ maxWidth: 720, margin: "0 auto" }}><div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.6, marginBottom: 10 }}>{language === "tr" ? "Uygulama Hatası" : "App Error"}</div><h1 style={{ margin: "0 0 12px", fontSize: 28 }}>{t(language, "app.error")}</h1><p style={{ margin: 0, lineHeight: 1.5 }}>{message || t(language, "app.error")}</p></div></div>;
 }
 
 function QrModal({ title, subtitle, imageUrl, footer, primaryLabel, secondaryLabel, onPrimary, onSecondary, onClose }) {

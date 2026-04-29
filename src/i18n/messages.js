@@ -1,0 +1,46 @@
+export const MESSAGES = {
+  en: {
+    "app.welcome": "Welcome to the School Meeting Portal",
+    "app.enterCode": "Enter your meeting code",
+    "app.login": "Login to the Meeting Portal",
+    "app.howItWorks": "How it is Done",
+    "app.loading": "Loading…",
+    "app.error": "Something went wrong",
+    "app.frontDesk": "Front desk",
+    "app.admin": "Admin",
+    "app.parentNote": "Parents can scan the printed QR code or enter the meeting code provided by the school.",
+    "app.helpFallback": "Enter the meeting code to open the meeting plan.",
+    "app.schoolFallback": "TED Bursa Koleji",
+    "app.eventFallback": "Parent Meeting Portal",
+    "frontDesk.title": "Arrival log and quick class search",
+    "frontDesk.search": "Search by student, parent, or class",
+    "frontDesk.arrived": "Mark arrived",
+    "frontDesk.undo": "Undo",
+    "frontDesk.meeting": "Meeting",
+    "frontDesk.room": "Room",
+  },
+  tr: {
+    "app.welcome": "Okul Toplantı Portalına Hoş Geldiniz",
+    "app.enterCode": "Toplantı kodunuzu girin",
+    "app.login": "Toplantı Portalına Giriş",
+    "app.howItWorks": "Nasıl Yapılır",
+    "app.loading": "Yükleniyor…",
+    "app.error": "Bir sorun oluştu",
+    "app.frontDesk": "Ön büro",
+    "app.admin": "Yönetici",
+    "app.parentNote": "Veliler basılı QR kodunu tarayabilir ya da okulun verdiği toplantı kodunu girebilir.",
+    "app.helpFallback": "Toplantı planını açmak için toplantı kodunu girin.",
+    "app.schoolFallback": "TED Bursa Koleji",
+    "app.eventFallback": "Veli Toplantısı Portalı",
+    "frontDesk.title": "Geliş kaydı ve hızlı sınıf arama",
+    "frontDesk.search": "Öğrenci, veli veya sınıfa göre arayın",
+    "frontDesk.arrived": "Geldi olarak işaretle",
+    "frontDesk.undo": "Geri al",
+    "frontDesk.meeting": "Toplantı",
+    "frontDesk.room": "Oda",
+  },
+};
+
+export function t(language, key) {
+  return MESSAGES[language]?.[key] || MESSAGES.en[key] || key;
+}
