@@ -27,12 +27,6 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const tempRole = getTemporaryRole(email, password);
-      if (tempRole) {
-        await loginAsDemo(tempRole);
-        return;
-      }
-
       if (isDemoMode) {
         await loginAsDemo(detectDemoRole(email));
       } else {
@@ -123,15 +117,6 @@ function detectDemoRole(email) {
   const value = String(email || "").toLowerCase();
   if (value.includes("front")) return "frontdesk";
   return "admin";
-}
-
-function getTemporaryRole(email, password) {
-  const value = String(email || "").trim().toLowerCase();
-  const secret = String(password || "").trim();
-  if (secret !== "password") return null;
-  if (value === "admin") return "admin";
-  if (value === "staff" || value === "frontdesk") return "frontdesk";
-  return null;
 }
 
 const styles = {
