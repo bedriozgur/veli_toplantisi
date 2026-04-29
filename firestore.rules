@@ -7,15 +7,25 @@ service cloud.firestore {
     }
 
     function role() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isTempAdminEmail() {
+      return signedIn() && request.auth.token.email == "admin@veli-toplantisi.local";
+    }
+
+    function isTempFrontDeskEmail() {
+      return signedIn() && request.auth.token.email == "staff@veli-toplantisi.local";
     }
 
     function isAdmin() {
-      return signedIn() && role() == "admin";
+      return signedIn() && (role() == "admin" || isTempAdminEmail());
     }
 
     function isFrontDesk() {
-      return signedIn() && (role() == "frontdesk" || role() == "admin");
+      return signedIn() && (role() == "frontdesk" || role() == "admin" || isTempFrontDeskEmail() || isTempAdminEmail());
     }
 
     function meetingIsActive(meetingId) {

@@ -1,10 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import { auth, db, doc, getDoc, isFirebaseConfigured } from "../firebase";
 import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/demoSeed";
 
 const AuthContext = createContext(null);
 const DEMO_STORAGE_KEY = "veli_toplantisi_demo_user";
+const TEMP_ACCOUNTS = {
+  admin: { email: "admin@veli-toplantisi.local", password: "password", role: "admin" },
+  frontdesk: { email: "staff@veli-toplantisi.local", password: "password", role: "frontdesk" },
+};
 
 function loadDemoUser() {
   try {
@@ -25,6 +34,22 @@ function saveDemoUser(user) {
   } catch {}
 }
 
+function roleFromEmail(email) {
+  const value = String(email || "").toLowerCase();
+  if (value === TEMP_ACCOUNTS.admin.email) return TEMP_ACCOUNTS.admin.role;
+  if (value === TEMP_ACCOUNTS.frontdesk.email) return TEMP_ACCOUNTS.frontdesk.role;
+  return null;
+}
+
+function tempAccountForLogin(email, password) {
+  const username = String(email || "").trim().toLowerCase();
+  const secret = String(password || "").trim();
+  if (secret !== TEMP_ACCOUNTS.admin.password) return null;
+  if (username === "admin") return TEMP_ACCOUNTS.admin;
+  if (username === "staff" || username === "frontdesk") return TEMP_ACCOUNTS.frontdesk;
+  return null;
+}
+
 export function AuthProvider({ children }) {
   const demoUser = !isFirebaseConfigured ? loadDemoUser() : null;
   const [currentUser, setCurrentUser] = useState(demoUser);
@@ -41,9 +66,15 @@ export function AuthProvider({ children }) {
 
     const snap = await getDoc(doc(db, "users", firebaseUser.uid));
     if (!snap.exists()) {
-      setUserProfile(null);
-      setUserRole(null);
-      if (auth) {
+      const fallbackRole = roleFromEmail(firebaseUser.email);
+      setUserProfile({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || "",
+        displayName: firebaseUser.displayName || "",
+        role: fallbackRole,
+      });
+      setUserRole(fallbackRole);
+      if (!fallbackRole && auth) {
         await signOut(auth);
       }
       return;
@@ -82,6 +113,17 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     if (!isFirebaseConfigured || !auth) {
       throw new Error("Firebase configuration is missing.");
+    }
+    const tempAccount = tempAccountForLogin(email, password);
+    if (tempAccount) {
+      try {
+        return await signInWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
+      } catch (err) {
+        if (err?.code !== "auth/user-not-found" && err?.code !== "auth/invalid-credential") {
+          throw err;
+        }
+        return createUserWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
+      }
     }
     return signInWithEmailAndPassword(auth, email, password);
   }, []);

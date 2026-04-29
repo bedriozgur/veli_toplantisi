@@ -4,6 +4,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { createMeeting, getMeetings } from "../../services/meetingService";
 import { useLanguage } from "../../contexts/LanguageContext";
 
+const CLASS_OPTIONS = buildClassOptions();
+
 export default function AdminDashboard() {
   const { currentUser } = useAuth();
   const { t } = useLanguage();
@@ -11,7 +13,7 @@ export default function AdminDashboard() {
   const [meetings, setMeetings] = useState([]);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
-  const [grades, setGrades] = useState("5A,5B,6A");
+  const [selectedClasses, setSelectedClasses] = useState(["5A", "5B", "6A"]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -37,17 +39,14 @@ export default function AdminDashboard() {
         {
           title,
           date,
-          grades: grades
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
+          grades: selectedClasses,
         },
         currentUser?.uid || "unknown"
       );
       setMeetings((prev) => [meeting, ...prev]);
       setTitle("");
       setDate("");
-      setGrades("5A,5B,6A");
+      setSelectedClasses(["5A", "5B", "6A"]);
       setMessage(t("admin.created"));
       navigate(`/admin/meetings/${meeting.id}`);
     } catch (err) {
@@ -88,7 +87,33 @@ export default function AdminDashboard() {
           <form onSubmit={handleCreate} style={styles.form}>
             <input placeholder={t("admin.meetingTitle")} value={title} onChange={(e) => setTitle(e.target.value)} style={styles.input} />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.input} />
-            <input placeholder={t("admin.meetingGrades")} value={grades} onChange={(e) => setGrades(e.target.value)} style={styles.input} />
+            <div>
+              <p style={styles.selectionLabel}>{t("admin.meetingClasses")}</p>
+              <div style={styles.classGrid}>
+                {CLASS_OPTIONS.map((className) => {
+                  const active = selectedClasses.includes(className);
+                  return (
+                    <button
+                      key={className}
+                      type="button"
+                      onClick={() => {
+                        setSelectedClasses((prev) =>
+                          prev.includes(className)
+                            ? prev.filter((item) => item !== className)
+                            : [...prev, className]
+                        );
+                      }}
+                      style={{
+                        ...styles.classChip,
+                        ...(active ? styles.classChipActive : null),
+                      }}
+                    >
+                      {className}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <button style={styles.button} disabled={busy}>
               {busy ? t("admin.creating") : t("admin.createMeeting")}
             </button>
@@ -199,6 +224,32 @@ const styles = {
     border: "1px solid #d1d5db",
     fontSize: 15,
   },
+  selectionLabel: {
+    margin: "0 0 10px",
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#374151",
+  },
+  classGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
+    gap: 8,
+  },
+  classChip: {
+    padding: "0.7rem 0.4rem",
+    borderRadius: 12,
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  classChipActive: {
+    background: "#1d4ed8",
+    color: "#fff",
+    borderColor: "#1d4ed8",
+  },
   button: {
     padding: "0.95rem 1rem",
     borderRadius: 14,
@@ -239,3 +290,14 @@ const styles = {
     fontWeight: 700,
   },
 };
+
+function buildClassOptions() {
+  const classes = [];
+  for (let grade = 1; grade <= 12; grade += 1) {
+    ["A", "B", "C", "D"].forEach((branch) => {
+      classes.push(`${grade}${branch}`);
+    });
+  }
+  classes.push("Hazirlik");
+  return classes;
+}
