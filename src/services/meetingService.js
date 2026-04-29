@@ -1243,6 +1243,32 @@ export async function updateClassTeachers(meetingId, classId, teachers) {
   });
 }
 
+export async function updateClassTeacherNotes(meetingId, classId, teacherId, update) {
+  const payload = {
+    visited: Boolean(update?.visited),
+    notes: update?.notes || "",
+    updatedAt: hasFirestore() ? serverTimestamp() : nowIso(),
+  };
+
+  if (!hasFirestore()) {
+    updateDemoStore((store) => {
+      const classItem = store.classesByMeeting?.[meetingId]?.find((item) => item.id === classId);
+      if (classItem) {
+        classItem.teacherNotes = classItem.teacherNotes || {};
+        classItem.teacherNotes[teacherId] = payload;
+        classItem.updatedAt = nowIso();
+      }
+      return store;
+    });
+    return;
+  }
+
+  await updateDoc(doc(ensureDb(), "meetings", meetingId, "classes", classId), {
+    [`teacherNotes.${teacherId}`]: payload,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function getStudents(meetingId, classId) {
   if (!hasFirestore()) {
     return clone(readDemoStore().studentsByMeeting?.[meetingId]?.[classId] || []);

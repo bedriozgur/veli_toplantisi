@@ -10,8 +10,8 @@ export function generateMeetingAccessCode() {
   return `MEET-${random}`;
 }
 
-export function buildMailtoLink({ studentName, meetingTitle, date, teachers, meetings }) {
-  const subject = encodeURIComponent(`Veli Toplantısı Notlarım - ${studentName} - ${date}`);
+export function buildMailtoLink({ label, meetingTitle, date, teachers, meetings }) {
+  const subject = encodeURIComponent(`Veli Toplantısı Notlarım - ${label || ""} - ${date}`);
   const lines = (teachers || [])
     .slice()
     .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -26,7 +26,7 @@ export function buildMailtoLink({ studentName, meetingTitle, date, teachers, mee
     [
       meetingTitle,
       `Tarih: ${date}`,
-      `Öğrenci: ${studentName}`,
+      label ? `Sınıf: ${label}` : "",
       "",
       ...lines,
     ].join("\n")

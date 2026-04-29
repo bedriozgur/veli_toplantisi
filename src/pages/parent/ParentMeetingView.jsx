@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { buildMailtoLink } from "../../utils/accessCode";
-import { getClasses, getStudents, resolveAccessCode, updateTeacherMeeting } from "../../services/meetingService";
+import { getClasses, resolveAccessCode, updateClassTeacherNotes } from "../../services/meetingService";
 import LanguageToggle from "../../components/LanguageToggle";
 import { useLanguage } from "../../contexts/LanguageContext";
 
@@ -12,8 +12,6 @@ export default function ParentMeetingView() {
   const [access, setAccess] = useState(null);
   const [classItem, setClassItem] = useState(null);
   const [classes, setClasses] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [selectedStudentId, setSelectedStudentId] = useState("");
   const [drafts, setDrafts] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -33,8 +31,6 @@ export default function ParentMeetingView() {
 
       if (!resolved.classId) {
         setClassItem(null);
-        setStudents([]);
-        setSelectedStudentId("");
         setDrafts({});
         return;
       }
@@ -45,36 +41,26 @@ export default function ParentMeetingView() {
         return;
       }
 
-      const loadedStudents = await getStudents(resolved.meetingId, resolved.classId);
       setClassItem(loadedClass);
-      setStudents(loadedStudents);
-
-      const firstStudent = loadedStudents[0] || null;
-      setSelectedStudentId(firstStudent?.id || "");
-      setDrafts(buildDrafts(firstStudent, loadedClass));
+      setDrafts(buildDrafts(loadedClass));
     }
 
     load().catch(() => setError(t("parent.error")));
   }, [code, t]);
 
-  const selectedStudent = useMemo(
-    () => students.find((student) => student.id === selectedStudentId) || null,
-    [students, selectedStudentId]
-  );
-
   useEffect(() => {
-    if (selectedStudent) {
-      setDrafts(buildDrafts(selectedStudent, classItem));
+    if (classItem) {
+      setDrafts(buildDrafts(classItem));
     }
-  }, [selectedStudent, classItem]);
+  }, [classItem]);
 
   async function handleSave() {
-    if (!access || !classItem || !selectedStudent) return;
+    if (!access || !classItem) return;
     setSaving(true);
     try {
       for (const teacher of classItem.teachers || []) {
         const draft = drafts[teacher.id] || {};
-        await updateTeacherMeeting(access.meetingId, classItem.id, selectedStudent.id, teacher.id, {
+        await updateClassTeacherNotes(access.meetingId, classItem.id, teacher.id, {
           visited: Boolean(draft.visited),
           notes: draft.notes || "",
         });
@@ -121,15 +107,13 @@ export default function ParentMeetingView() {
     return <div style={styles.page}>{t("parent.loading")}</div>;
   }
 
-  const mailto = selectedStudent
-    ? buildMailtoLink({
-        studentName: selectedStudent.studentName,
-        meetingTitle: access.meetingTitle || t("login.title"),
-        date: access.meetingDate || "",
-        teachers: classItem.teachers || [],
-        meetings: drafts,
-      })
-    : "#";
+  const mailto = buildMailtoLink({
+    label: access.classLabel || classItem.classLabel || classItem.id,
+    meetingTitle: access.meetingTitle || t("login.title"),
+    date: access.meetingDate || "",
+    teachers: classItem.teachers || [],
+    meetings: drafts,
+  });
 
   return (
     <div style={styles.page}>
@@ -141,69 +125,62 @@ export default function ParentMeetingView() {
           {access.meetingDate || t("parent.notSpecified")} · {t("parent.code")}: {code} · {t("parent.classLabel")}: {access.classLabel || classItem.id}
           </p>
 
-        <label style={styles.label}>
-          {t("parent.selectStudent")}
-          <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} style={styles.input}>
-            {students.map((student) => (
-              <option key={student.id} value={student.id}>{student.studentName}</option>
-            ))}
-          </select>
-        </label>
-
-        {selectedStudent ? (
-          <>
-            <div style={styles.teacherList}>
-              {(classItem.teachers || []).map((teacher) => {
-                const draft = drafts[teacher.id] || {};
-                return (
-                  <div key={teacher.id} style={styles.teacherCard}>
-                  <div style={styles.teacherTop}>
-                    <div>
-                      <strong>{teacher.subject || teacher.name}</strong>
-                      <div style={styles.sub}>{teacher.name} · {teacher.room || t("parent.notSpecified")}</div>
+        <div style={styles.teacherList}>
+          {(classItem.teachers || []).map((teacher) => {
+            const draft = drafts[teacher.id] || {};
+            return (
+              <div key={teacher.id} style={styles.teacherCard}>
+                <div style={styles.teacherTop}>
+                  <div>
+                    <strong>{teacher.subject || teacher.name}</strong>
+                    <div style={styles.sub}>
+                      {teacher.name} · {teacher.floor || t("parent.notSpecified")} - {teacher.room || t("parent.notSpecified")}
                     </div>
-                    <label style={styles.checkWrap}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(draft.visited)}
-                          onChange={(e) => setDrafts((prev) => ({
-                            ...prev,
-                            [teacher.id]: { ...prev[teacher.id], visited: e.target.checked },
-                          }))}
-                        />
-                        {t("parent.visited")}
-                      </label>
-                    </div>
-                    <textarea
-                      value={draft.notes || ""}
-                      onChange={(e) => setDrafts((prev) => ({
-                        ...prev,
-                        [teacher.id]: { ...prev[teacher.id], notes: e.target.value },
-                      }))}
-                      placeholder={t("parent.notes")}
-                      rows={3}
-                      style={styles.textarea}
-                    />
                   </div>
-                );
-              })}
-            </div>
+                  <label style={styles.checkWrap}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.visited)}
+                      onChange={(e) =>
+                        setDrafts((prev) => ({
+                          ...prev,
+                          [teacher.id]: { ...prev[teacher.id], visited: e.target.checked },
+                        }))
+                      }
+                    />
+                    {t("parent.visited")}
+                  </label>
+                </div>
+                <textarea
+                  value={draft.notes || ""}
+                  onChange={(e) =>
+                    setDrafts((prev) => ({
+                      ...prev,
+                      [teacher.id]: { ...prev[teacher.id], notes: e.target.value },
+                    }))
+                  }
+                  placeholder={t("parent.notes")}
+                  rows={3}
+                  style={styles.textarea}
+                />
+              </div>
+            );
+          })}
+        </div>
 
-            <div style={styles.actions}>
-              <button type="button" onClick={handleSave} disabled={saving} style={styles.button}>
-                {saving ? t("parent.sending") : t("parent.save")}
-              </button>
-              <a href={mailto} style={styles.link}>{t("parent.sendEmail")}</a>
-            </div>
-          </>
-        ) : null}
+        <div style={styles.actions}>
+          <button type="button" onClick={handleSave} disabled={saving} style={styles.button}>
+            {saving ? t("parent.sending") : t("parent.save")}
+          </button>
+          <a href={mailto} style={styles.link}>{t("parent.sendEmail")}</a>
+        </div>
       </section>
     </div>
   );
 }
 
-function buildDrafts(student, classItem) {
-  const meetings = student?.meetings || {};
+function buildDrafts(classItem) {
+  const meetings = classItem?.teacherNotes || {};
   return Object.fromEntries((classItem?.teachers || []).map((teacher) => [
     teacher.id,
     {
@@ -278,7 +255,6 @@ const styles = {
     color: "#111827",
     fontWeight: 700,
   },
-  label: { display: "grid", gap: 8, marginTop: 18, fontWeight: 700 },
   input: { padding: "0.8rem 0.9rem", borderRadius: 12, border: "1px solid #d1d5db" },
   teacherList: { display: "grid", gap: 12, marginTop: 18 },
   teacherCard: { borderRadius: 16, background: "#f9fafb", padding: 16 },
