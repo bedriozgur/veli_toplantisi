@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { buildMailtoLink } from "../../utils/accessCode";
 import { getClasses, getStudents, resolveAccessCode, updateTeacherMeeting } from "../../services/meetingService";
 import LanguageToggle from "../../components/LanguageToggle";
@@ -7,9 +7,11 @@ import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function ParentMeetingView() {
   const { code } = useParams();
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const [access, setAccess] = useState(null);
   const [classItem, setClassItem] = useState(null);
+  const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [drafts, setDrafts] = useState({});
@@ -26,6 +28,17 @@ export default function ParentMeetingView() {
       }
 
       const classes = await getClasses(resolved.meetingId);
+      setAccess(resolved);
+      setClasses(classes);
+
+      if (!resolved.classId) {
+        setClassItem(null);
+        setStudents([]);
+        setSelectedStudentId("");
+        setDrafts({});
+        return;
+      }
+
       const loadedClass = classes.find((item) => item.id === resolved.classId) || null;
       if (!loadedClass) {
         setError(t("parent.classMissing"));
@@ -33,7 +46,6 @@ export default function ParentMeetingView() {
       }
 
       const loadedStudents = await getStudents(resolved.meetingId, resolved.classId);
-      setAccess(resolved);
       setClassItem(loadedClass);
       setStudents(loadedStudents);
 
@@ -77,6 +89,35 @@ export default function ParentMeetingView() {
   }
 
   if (!access || !classItem) {
+    if (access?.meetingId && !access.classId) {
+      return (
+        <div style={styles.page}>
+          <LanguageToggle />
+          <section style={styles.card}>
+            <div style={styles.badge}>{t("parent.view")}</div>
+            <h1 style={styles.title}>{access.meetingTitle || t("login.title")}</h1>
+            <p style={styles.text}>
+              {access.meetingDate || t("parent.notSpecified")} · {t("parent.meetingCode")}: {access.code}
+            </p>
+
+            <div style={styles.classPicker}>
+              <div style={styles.classPickerHead}>
+                <strong>{t("parent.chooseClass")}</strong>
+                <span style={styles.hint}>{t("parent.chooseClassHint")}</span>
+              </div>
+              <div style={styles.classGrid}>
+                {classes.map((item) => (
+                  <button key={item.id} type="button" onClick={() => navigate(`/parent/${item.accessCode}`)} style={styles.classButton}>
+                    <span>{item.classLabel || item.id}</span>
+                    <small>{item.accessCode || t("parent.notSpecified")}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      );
+    }
     return <div style={styles.page}>{t("parent.loading")}</div>;
   }
 
@@ -95,10 +136,10 @@ export default function ParentMeetingView() {
       <LanguageToggle />
       <section style={styles.card}>
         <div style={styles.badge}>{t("parent.view")}</div>
-        <h1 style={styles.title}>{access.meetingTitle || t("login.title")}</h1>
-        <p style={styles.text}>
+          <h1 style={styles.title}>{access.meetingTitle || t("login.title")}</h1>
+          <p style={styles.text}>
           {access.meetingDate || t("parent.notSpecified")} · {t("parent.code")}: {code} · {t("parent.classLabel")}: {access.classLabel || classItem.id}
-        </p>
+          </p>
 
         <label style={styles.label}>
           {t("parent.selectStudent")}
@@ -200,6 +241,43 @@ const styles = {
   },
   title: { marginTop: 0 },
   text: { color: "#6b7280", lineHeight: 1.5 },
+  classPicker: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f8fafc",
+    border: "1px solid #e5e7eb",
+    display: "grid",
+    gap: 12,
+  },
+  classPickerHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  hint: {
+    color: "#6b7280",
+    fontSize: 14,
+  },
+  classGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gap: 10,
+  },
+  classButton: {
+    border: "1px solid #d1d5db",
+    background: "#fff",
+    borderRadius: 16,
+    padding: "0.9rem 1rem",
+    textAlign: "left",
+    display: "grid",
+    gap: 4,
+    cursor: "pointer",
+    color: "#111827",
+    fontWeight: 700,
+  },
   label: { display: "grid", gap: 8, marginTop: 18, fontWeight: 700 },
   input: { padding: "0.8rem 0.9rem", borderRadius: 12, border: "1px solid #d1d5db" },
   teacherList: { display: "grid", gap: 12, marginTop: 18 },

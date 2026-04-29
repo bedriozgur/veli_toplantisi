@@ -4,6 +4,12 @@ export function generateAccessCode(grade, branch) {
   return `${grade}${branch}-${random}`;
 }
 
+export function generateMeetingAccessCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const random = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `MEET-${random}`;
+}
+
 export function buildMailtoLink({ studentName, meetingTitle, date, teachers, meetings }) {
   const subject = encodeURIComponent(`Veli Toplantısı Notlarım - ${studentName} - ${date}`);
   const lines = (teachers || [])

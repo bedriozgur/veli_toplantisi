@@ -13,7 +13,7 @@ import {
   Timestamp,
 } from "../firebase";
 import { isDemoStoreForced } from "../firebase";
-import { generateAccessCode } from "../utils/accessCode";
+import { generateAccessCode, generateMeetingAccessCode } from "../utils/accessCode";
 
 const DEMO_STORE_KEY = "veli_toplantisi_demo_store_v1";
 
@@ -102,7 +102,7 @@ function readDemoStore() {
     const raw = localStorage.getItem(DEMO_STORE_KEY);
     if (!raw) return emptyDemoStore();
     const parsed = JSON.parse(raw);
-    return {
+    const next = {
       ...emptyDemoStore(),
       ...parsed,
       meetings: Array.isArray(parsed?.meetings) ? parsed.meetings : [],
@@ -112,6 +112,31 @@ function readDemoStore() {
       accessCodes: parsed?.accessCodes || {},
       users: Array.isArray(parsed?.users) ? parsed.users : defaultUsers(),
     };
+    let changed = false;
+    for (const meeting of next.meetings) {
+      const code = meeting.meetingCode || (meeting.id === "demo-school-meeting" ? "DEMO-MEETING" : "");
+      if (code && !meeting.meetingCode) {
+        meeting.meetingCode = code;
+        changed = true;
+      }
+      if (code && !next.accessCodes[code]) {
+        next.accessCodes[code] = {
+          code,
+          meetingId: meeting.id,
+          classId: "",
+          classLabel: "",
+          meetingTitle: meeting.title || "",
+          meetingDate: meeting.date || "",
+          expiresAt: meeting.date ? new Date(`${meeting.date}T23:59:59.999Z`).toISOString() : null,
+          active: true,
+        };
+        changed = true;
+      }
+    }
+    if (changed) {
+      writeDemoStore(next);
+    }
+    return next;
   } catch {
     return emptyDemoStore();
   }
@@ -301,6 +326,26 @@ function hydrateDemoMeetingFromSeed(store, meetingId) {
   let changed = false;
 
   ensureMeetingClassArray(store, meetingId);
+
+  const meetingCode = meeting.meetingCode || (meetingId === seedMeetingId ? "DEMO-MEETING" : generateMeetingAccessCode());
+  if (!meeting.meetingCode) {
+    meeting.meetingCode = meetingCode;
+    changed = true;
+  }
+
+  if (!store.accessCodes[meetingCode]) {
+    store.accessCodes[meetingCode] = {
+      code: meetingCode,
+      meetingId,
+      classId: "",
+      classLabel: "",
+      meetingTitle: meeting.title || "",
+      meetingDate: meeting.date || "",
+      expiresAt: meeting.date ? new Date(`${meeting.date}T23:59:59.999Z`).toISOString() : null,
+      active: true,
+    };
+    changed = true;
+  }
 
   if ((store.roomsByMeeting[meetingId] || []).length === 0 && seedRooms.length > 0) {
     store.roomsByMeeting[meetingId] = clone(seedRooms);
@@ -526,6 +571,7 @@ function buildSeedMeeting() {
       title: TURKISH_MEETING_TITLE,
       date: TURKISH_MEETING_DATE,
       status: "active",
+      meetingCode: "DEMO-MEETING",
       grades: TURKISH_CLASSES.map((item) => item.classLabel),
       labels: {
         teacherColumn: "Ogrenci",
@@ -544,6 +590,21 @@ function buildSeedMeeting() {
     classes,
     studentsByClass: Object.fromEntries(classes.map((classItem) => [classItem.id, classItem.students])),
     accessCodes: Object.fromEntries(
+      [
+        [
+          "DEMO-MEETING",
+          {
+            code: "DEMO-MEETING",
+            meetingId: "demo-school-meeting",
+            classId: "",
+            classLabel: "",
+            meetingTitle: TURKISH_MEETING_TITLE,
+            meetingDate: TURKISH_MEETING_DATE,
+            expiresAt: new Date(`${TURKISH_MEETING_DATE}T23:59:59.999Z`).toISOString(),
+            active: true,
+          },
+        ],
+      ].concat(
       classes.map((classItem) => [
         classItem.accessCode,
         {
@@ -557,6 +618,7 @@ function buildSeedMeeting() {
           active: true,
         },
       ])
+      )
     ),
   };
 }
@@ -622,12 +684,14 @@ export function subscribeMeeting(meetingId, onUpdate) {
 }
 
 export async function createMeeting({ title, date, grades }, adminUid) {
+  const meetingCode = generateMeetingAccessCode();
   if (!hasFirestore()) {
     const meeting = {
       id: localId("meeting"),
       title,
       date,
       status: "draft",
+      meetingCode,
       grades,
       labels: {
         teacherColumn: "Öğretmen",
@@ -647,6 +711,16 @@ export async function createMeeting({ title, date, grades }, adminUid) {
       ensureMeetingClassArray(store, meeting.id);
       const seed = hasFullSchoolSeed() ? buildSeedMeeting() : null;
       const selected = Array.isArray(grades) ? grades : [];
+      store.accessCodes[meetingCode] = {
+        code: meetingCode,
+        meetingId: meeting.id,
+        classId: "",
+        classLabel: "",
+        meetingTitle: meeting.title || "",
+        meetingDate: meeting.date || "",
+        expiresAt: meeting.date ? new Date(`${meeting.date}T23:59:59.999Z`).toISOString() : null,
+        active: true,
+      };
       if (seed && selected.length > 0) {
         const seedClasses = new Map(seed.classes.map((classItem) => [normalizeClassName(classItem.id), classItem]));
         store.roomsByMeeting[meeting.id] = clone(seed.rooms || []);
@@ -701,6 +775,7 @@ export async function createMeeting({ title, date, grades }, adminUid) {
     title,
     date,
     status: "draft",
+    meetingCode,
     grades,
     labels: {
       teacherColumn: "Öğretmen",
@@ -715,6 +790,16 @@ export async function createMeeting({ title, date, grades }, adminUid) {
     updatedAt: serverTimestamp(),
   };
   await setDoc(ref, payload);
+  await setDoc(doc(ensureDb(), "accessCodes", meetingCode), {
+    code: meetingCode,
+    meetingId: ref.id,
+    classId: "",
+    classLabel: "",
+    meetingTitle: title || "",
+    meetingDate: date || "",
+    expiresAt: date ? Timestamp.fromDate(new Date(`${date}T23:59:59.999Z`)) : null,
+    active: true,
+  });
   return payload;
 }
 
@@ -1232,11 +1317,12 @@ export async function resolveAccessCode(code) {
 
   return {
     meetingId: data.meetingId,
-    classId: data.classId,
+    classId: data.classId || "",
     code: data.code,
     classLabel: data.classLabel || data.classId,
     meetingTitle: data.meetingTitle || "",
     meetingDate: data.meetingDate || "",
+    isMeetingCode: !data.classId,
   };
 }
 

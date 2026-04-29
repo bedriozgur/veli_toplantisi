@@ -321,6 +321,10 @@ export default function AdminMeetingDetail() {
             <span style={styles.metaLabel}>{t("admin.detailClassCount")}</span>
             <strong>{classes.length}</strong>
           </div>
+          <div style={styles.metaCard}>
+            <span style={styles.metaLabel}>{t("parent.meetingCode")}</span>
+            <strong>{meeting.meetingCode || t("admin.detailNone")}</strong>
+          </div>
         </div>
       </section>
 
@@ -768,7 +772,7 @@ const styles = {
   },
   heroMeta: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
     gap: 12,
   },
   metaCard: {
