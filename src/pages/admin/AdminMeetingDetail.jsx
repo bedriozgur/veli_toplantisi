@@ -303,7 +303,7 @@ export default function AdminMeetingDetail() {
   return (
     <div style={styles.page}>
       <section style={styles.hero}>
-        <div>
+        <div style={styles.heroMain}>
           <div style={styles.badge}>{t("admin.detailBadge")}</div>
           <h2 style={styles.title}>{meetingDraft.title || meeting.title}</h2>
           <p style={styles.text}>
@@ -405,9 +405,9 @@ export default function AdminMeetingDetail() {
             </div>
           </div>
 
-          <div style={styles.sectionDivider}>
+          <div style={styles.subcard}>
             <div>
-              <h3 style={styles.cardTitle}>{t("admin.detailRoomSection")}</h3>
+              <h3 style={styles.subcardTitle}>{t("admin.detailRoomSection")}</h3>
               <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
             </div>
             <div style={styles.roomAddRow}>
@@ -427,32 +427,35 @@ export default function AdminMeetingDetail() {
                 {t("admin.detailAddRoom")}
               </button>
             </div>
-          </div>
-
-          <div style={styles.roomList}>
-            {rooms.map((room) => (
-              <div key={room.id} style={styles.roomItem}>
-                <input
-                  value={room.name || ""}
-                  onChange={(event) => setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, name: event.target.value })))}
-                  placeholder={t("admin.detailRoomName")}
-                  style={styles.input}
-                />
-                <input
-                  value={room.floor || ""}
-                  onChange={(event) => setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, floor: event.target.value })))}
-                  placeholder={t("admin.detailFloor")}
-                  style={styles.input}
-                />
-                <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
-                  {t("admin.detailSaveRoom")}
-                </button>
-                <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
-                  {t("admin.detailDeleteRoom")}
-                </button>
-              </div>
-            ))}
-            {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
+            <div style={styles.roomList}>
+              {rooms.map((room) => (
+                <div key={room.id} style={styles.roomItem}>
+                  <input
+                    value={room.name || ""}
+                    onChange={(event) =>
+                      setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, name: event.target.value })))
+                    }
+                    placeholder={t("admin.detailRoomName")}
+                    style={styles.input}
+                  />
+                  <input
+                    value={room.floor || ""}
+                    onChange={(event) =>
+                      setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, floor: event.target.value })))
+                    }
+                    placeholder={t("admin.detailFloor")}
+                    style={styles.input}
+                  />
+                  <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
+                    {t("admin.detailSaveRoom")}
+                  </button>
+                  <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
+                    {t("admin.detailDeleteRoom")}
+                  </button>
+                </div>
+              ))}
+              {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
+            </div>
           </div>
 
           <div style={styles.toolbar}>
@@ -707,18 +710,23 @@ function tabStyle(active) {
 const styles = {
   page: {
     display: "grid",
-    gap: 18,
+    gap: 16,
   },
   hero: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 20,
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) minmax(260px, 0.6fr)",
+    gap: 16,
     alignItems: "stretch",
-    padding: 24,
+    padding: 20,
     borderRadius: 24,
     background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)",
     color: "#fff",
     boxShadow: "0 18px 50px rgba(17, 24, 39, 0.2)",
+  },
+  heroMain: {
+    display: "grid",
+    gap: 8,
+    alignContent: "start",
   },
   badge: {
     display: "inline-flex",
@@ -743,7 +751,6 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
     gap: 12,
-    minWidth: 280,
   },
   metaCard: {
     borderRadius: 18,
@@ -760,6 +767,11 @@ const styles = {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
+    justifyContent: "center",
+    padding: 6,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.65)",
+    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)",
   },
   card: {
     background: "#fff",
@@ -768,6 +780,9 @@ const styles = {
     boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
     display: "grid",
     gap: 16,
+    maxWidth: 1120,
+    width: "100%",
+    justifySelf: "center",
   },
   sectionHead: {
     display: "flex",
@@ -781,6 +796,17 @@ const styles = {
     gap: 12,
     paddingTop: 8,
     borderTop: "1px solid #e5e7eb",
+  },
+  subcard: {
+    display: "grid",
+    gap: 12,
+    padding: 16,
+    borderRadius: 18,
+    background: "#f9fafb",
+  },
+  subcardTitle: {
+    margin: 0,
+    fontSize: 18,
   },
   cardTitle: {
     margin: 0,
@@ -900,12 +926,12 @@ const styles = {
   },
   grid: {
     display: "grid",
-    gap: 14,
+    gap: 12,
   },
   classCard: {
-    background: "#fff",
-    borderRadius: 20,
-    padding: 18,
+    background: "#fafafa",
+    borderRadius: 18,
+    padding: 16,
     border: "1px solid #e5e7eb",
     display: "grid",
     gap: 14,
@@ -959,6 +985,7 @@ const styles = {
     padding: 16,
     display: "grid",
     gap: 14,
+    background: "#fafafa",
   },
   teacherGrid: {
     display: "grid",
