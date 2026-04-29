@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import LanguageToggle from "../components/LanguageToggle";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function LoginPage() {
   const { login, loginAsDemo, userRole, authLoading, isDemoMode } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname;
@@ -38,13 +41,14 @@ export default function LoginPage() {
 
   return (
     <div style={styles.page}>
+      <LanguageToggle />
       <div style={styles.card}>
-        <h1 style={styles.title}>Veli Toplantısı</h1>
-        <p style={styles.subtitle}>Personel Girişi</p>
+        <h1 style={styles.title}>{t("login.title")}</h1>
+        <p style={styles.subtitle}>{t("login.subtitle")}</p>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <label style={styles.label}>
-            E-posta
+            {t("login.email")}
             <input
               type="email"
               value={email}
@@ -55,7 +59,7 @@ export default function LoginPage() {
           </label>
 
           <label style={styles.label}>
-            Şifre
+            {t("login.password")}
             <input
               type="password"
               value={password}
@@ -68,26 +72,26 @@ export default function LoginPage() {
           {error ? <p style={styles.error}>{error}</p> : null}
 
           <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? "Giriş yapılıyor…" : isDemoMode ? "Demo olarak devam et" : "Giriş Yap"}
+            {loading ? "..." : isDemoMode ? t("login.demoContinue") : t("login.submit")}
           </button>
         </form>
 
         {isDemoMode ? (
           <div style={styles.demoBlock}>
-            <p style={styles.demoText}>Firebase ayarlı değil. Yerel geliştirme için demo girişi kullanabilirsiniz.</p>
+            <p style={styles.demoText}>{t("login.demoNote")}</p>
             <div style={styles.demoButtons}>
               <button type="button" onClick={() => loginAsDemo("admin")} style={styles.demoButton}>
-                Demo admin
+                {t("login.demoAdmin")}
               </button>
               <button type="button" onClick={() => loginAsDemo("frontdesk")} style={styles.demoButtonAlt}>
-                Demo front desk
+                {t("login.demoFrontdesk")}
               </button>
             </div>
           </div>
         ) : null}
 
         <p style={styles.parentNote}>
-          Veli misiniz? <Link to="/parent" style={styles.link}>Toplantı kodunuzu girin</Link>
+          {t("login.parentPrompt")} <Link to="/parent" style={styles.link}>{t("app.enterCode")}</Link>
         </p>
       </div>
     </div>

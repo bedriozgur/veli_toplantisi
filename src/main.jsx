@@ -1,9 +1,15 @@
 import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import { AuthProvider } from "./contexts/AuthContext";
+import { LanguageProvider } from "./contexts/LanguageContext";
+import AppRouter from "./router/AppRouter";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    <LanguageProvider>
+      <AuthProvider>
+        <AppRouter />
+      </AuthProvider>
+    </LanguageProvider>
   </StrictMode>
 );

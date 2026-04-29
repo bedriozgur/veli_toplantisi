@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { getClasses, getMeetings, getStudents, markArrived } from "../../services/meetingService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function FrontDeskHome() {
   const { currentUser } = useAuth();
+  const { t } = useLanguage();
   const [meetings, setMeetings] = useState([]);
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
@@ -85,12 +87,12 @@ export default function FrontDeskHome() {
     <section style={styles.card}>
       <div style={styles.head}>
         <div>
-          <h2 style={styles.h2}>Hızlı arama</h2>
+          <h2 style={styles.h2}>{t("frontDesk.search")}</h2>
           <p style={styles.text}>Öğrenci, veli ya da sınıf adıyla arayın. Sonra geliş kaydını girin.</p>
         </div>
         <div style={styles.metrics}>
           <div style={styles.metric}>
-            <span style={styles.metricLabel}>Toplantı</span>
+            <span style={styles.metricLabel}>{t("frontDesk.meeting")}</span>
             <strong>{summary.meetings}</strong>
           </div>
           <div style={styles.metric}>
@@ -104,7 +106,7 @@ export default function FrontDeskHome() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Öğrenci, veli ya da sınıf"
+          placeholder={t("frontDesk.search")}
           style={styles.input}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -146,7 +148,7 @@ export default function FrontDeskHome() {
                     {result.student.parentPhone ? <span style={styles.phoneBadge}>{result.student.parentPhone}</span> : null}
                   </div>
                 </div>
-                <button
+                  <button
                   style={styles.smallButton}
                   onClick={() => handleMarkArrived(result)}
                   disabled={Boolean(result.student.arrivedAt) && markingKey !== `${result.meeting.id}:${result.classItem.id}:${result.student.id}`}
@@ -155,7 +157,7 @@ export default function FrontDeskHome() {
                     ? "Kaydediliyor…"
                     : result.student.arrivedAt
                       ? "Kaydedildi"
-                      : "Geldi"}
+                      : t("frontDesk.arrived")}
                 </button>
               </>
             )}

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getMeetings } from "../../services/meetingService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function AdminMeetings() {
+  const { t } = useLanguage();
   const [meetings, setMeetings] = useState([]);
 
   useEffect(() => {
@@ -13,7 +15,7 @@ export default function AdminMeetings() {
     <div style={styles.card}>
       <div style={styles.head}>
         <div>
-          <h2 style={styles.h2}>Toplantılar</h2>
+          <h2 style={styles.h2}>{t("admin.meetings")}</h2>
           <p style={styles.text}>Her toplantının içine sınıf ve öğrenci CSV yükleyebilirsiniz.</p>
         </div>
         <span style={styles.count}>{meetings.length} kayıt</span>
@@ -28,7 +30,7 @@ export default function AdminMeetings() {
             <span style={styles.go}>Aç</span>
           </Link>
         ))}
-        {!meetings.length ? <p style={styles.text}>Toplantı bulunamadı.</p> : null}
+        {!meetings.length ? <p style={styles.text}>{t("admin.noMeetings")}</p> : null}
       </div>
     </div>
   );

@@ -1,11 +1,15 @@
 import React from "react";
 import { Outlet } from "react-router-dom";
+import LanguageToggle from "../../components/LanguageToggle";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function FrontDeskLayout() {
+  const { t } = useLanguage();
   return (
     <div style={styles.page}>
+      <LanguageToggle />
       <header style={styles.header}>
-        <div style={styles.badge}>Front Desk</div>
+        <div style={styles.badge}>{t("app.frontDesk")}</div>
         <h1 style={styles.title}>Gelen öğrencileri hızlıca yönetin</h1>
         <p style={styles.text}>Sınıf ya da öğrenci adıyla arayın, giriş kaydı yapın.</p>
       </header>

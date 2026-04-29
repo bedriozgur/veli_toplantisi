@@ -2,9 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { buildMailtoLink } from "../../utils/accessCode";
 import { getClasses, getStudents, resolveAccessCode, updateTeacherMeeting } from "../../services/meetingService";
+import LanguageToggle from "../../components/LanguageToggle";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function ParentMeetingView() {
   const { code } = useParams();
+  const { t } = useLanguage();
   const [access, setAccess] = useState(null);
   const [classItem, setClassItem] = useState(null);
   const [students, setStudents] = useState([]);
@@ -18,7 +21,7 @@ export default function ParentMeetingView() {
       setError("");
       const resolved = await resolveAccessCode(code);
       if (!resolved) {
-        setError("Kod bulunamadı ya da süresi doldu.");
+        setError(t("parent.invalid"));
         return;
       }
 
@@ -39,8 +42,8 @@ export default function ParentMeetingView() {
       setDrafts(buildDrafts(firstStudent, loadedClass));
     }
 
-    load().catch(() => setError("Toplantı yüklenemedi."));
-  }, [code]);
+    load().catch(() => setError(t("parent.error")));
+  }, [code, t]);
 
   const selectedStudent = useMemo(
     () => students.find((student) => student.id === selectedStudentId) || null,
@@ -74,7 +77,7 @@ export default function ParentMeetingView() {
   }
 
   if (!access || !classItem) {
-    return <div style={styles.page}>Toplantı bilgisi yükleniyor…</div>;
+    return <div style={styles.page}>{t("parent.loading")}</div>;
   }
 
   const mailto = selectedStudent
@@ -89,9 +92,10 @@ export default function ParentMeetingView() {
 
   return (
     <div style={styles.page}>
+      <LanguageToggle />
       <section style={styles.card}>
         <div style={styles.badge}>Veli Görünümü</div>
-        <h1 style={styles.title}>{access.meetingTitle || "Veli Toplantısı"}</h1>
+        <h1 style={styles.title}>{access.meetingTitle || t("login.title")}</h1>
         <p style={styles.text}>
           {access.meetingDate || "Tarih belirtilmedi"} · Kod: {code} · Sınıf: {access.classLabel || classItem.id}
         </p>
@@ -115,7 +119,7 @@ export default function ParentMeetingView() {
                     <div style={styles.teacherTop}>
                   <div>
                     <strong>{teacher.subject || teacher.name}</strong>
-                    <div style={styles.sub}>{teacher.name} · {teacher.room || "-"}</div>
+                      <div style={styles.sub}>{teacher.name} · {teacher.room || "-"}</div>
                   </div>
                   <label style={styles.checkWrap}>
                         <input

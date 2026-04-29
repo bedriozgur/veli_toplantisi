@@ -2,8 +2,11 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { resolveAccessCode } from "../../services/meetingService";
+import LanguageToggle from "../../components/LanguageToggle";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function ParentCodeEntry() {
+  const { t } = useLanguage();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,12 +19,12 @@ export default function ParentCodeEntry() {
     try {
       const result = await resolveAccessCode(code);
       if (!result) {
-        setError("Kod bulunamadı ya da süresi doldu.");
+        setError(t("parent.invalid"));
         return;
       }
       navigate(`/parent/${result.code.toUpperCase()}`, { replace: true });
     } catch {
-      setError("Kod doğrulanamadı.");
+      setError(t("parent.error"));
     } finally {
       setLoading(false);
     }
@@ -29,15 +32,16 @@ export default function ParentCodeEntry() {
 
   return (
     <div style={styles.page}>
+      <LanguageToggle />
       <form onSubmit={handleSubmit} style={styles.card}>
         <div style={styles.badge}>Veli Girişi</div>
-        <h1 style={styles.title}>Toplantı kodunuzu girin</h1>
-        <p style={styles.text}>Kod geçerliyse sınıf görüşme planınız açılır. Giriş gerekmez.</p>
+        <h1 style={styles.title}>{t("parent.entryTitle")}</h1>
+        <p style={styles.text}>{t("parent.entryText")}</p>
         <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="5A-X7K2" style={styles.input} />
         {error ? <p style={styles.error}>{error}</p> : null}
-        <button disabled={loading} style={styles.button}>{loading ? "Kontrol ediliyor…" : "Devam et"}</button>
+        <button disabled={loading} style={styles.button}>{loading ? t("parent.loading") : t("parent.submit")}</button>
         <p style={styles.footer}>
-          Personel misiniz? <Link to="/login" style={styles.link}>Yönetim girişine gidin</Link>
+          {t("parent.personnel")} <Link to="/login" style={styles.link}>{t("parent.personnelLink")}</Link>
         </p>
       </form>
     </div>

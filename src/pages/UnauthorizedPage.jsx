@@ -1,13 +1,17 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import LanguageToggle from "../components/LanguageToggle";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function UnauthorizedPage() {
+  const { t } = useLanguage();
   return (
     <div style={styles.page}>
+      <LanguageToggle />
       <div style={styles.card}>
-        <h1 style={styles.title}>Erişim Yetkiniz Yok</h1>
-        <p style={styles.text}>Bu sayfayı görüntüleme yetkiniz bulunmuyor.</p>
-        <Link to="/login" style={styles.link}>Giriş sayfasına dön</Link>
+        <h1 style={styles.title}>{t("unauthorized.title")}</h1>
+        <p style={styles.text}>{t("unauthorized.text")}</p>
+        <Link to="/login" style={styles.link}>{t("unauthorized.link")}</Link>
       </div>
     </div>
   );

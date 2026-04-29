@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { createMeeting, getMeetings } from "../../services/meetingService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function AdminDashboard() {
   const { currentUser } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [meetings, setMeetings] = useState([]);
   const [title, setTitle] = useState("");
@@ -60,7 +62,7 @@ export default function AdminDashboard() {
       <section style={styles.hero}>
         <div>
           <div style={styles.badge}>Dashboard</div>
-          <h2 style={styles.title}>Toplantı dönemini yönetin</h2>
+          <h2 style={styles.title}>{t("admin.dashboard")}</h2>
           <p style={styles.text}>
             Yeni toplantı oluşturun, sonra sınıf ve öğrenci CSV dosyalarını toplantı detayında içe aktarın.
           </p>
@@ -86,18 +88,18 @@ export default function AdminDashboard() {
         <section style={styles.card}>
           <h3 style={styles.cardTitle}>Yeni toplantı</h3>
           <form onSubmit={handleCreate} style={styles.form}>
-            <input placeholder="Toplantı başlığı" value={title} onChange={(e) => setTitle(e.target.value)} style={styles.input} />
+            <input placeholder={t("admin.meetingTitle")} value={title} onChange={(e) => setTitle(e.target.value)} style={styles.input} />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={styles.input} />
-            <input placeholder="Sınıflar: 5A,5B,6A" value={grades} onChange={(e) => setGrades(e.target.value)} style={styles.input} />
+            <input placeholder={t("admin.meetingGrades")} value={grades} onChange={(e) => setGrades(e.target.value)} style={styles.input} />
             <button style={styles.button} disabled={busy}>
-              {busy ? "Oluşturuluyor…" : "Toplantı Oluştur"}
+              {busy ? "Oluşturuluyor…" : t("admin.createMeeting")}
             </button>
           </form>
           {message ? <p style={styles.message}>{message}</p> : null}
         </section>
 
         <section style={styles.card}>
-          <h3 style={styles.cardTitle}>Son toplantılar</h3>
+          <h3 style={styles.cardTitle}>{t("admin.recentMeetings")}</h3>
           <div style={styles.list}>
             {meetings.slice(0, 5).map((meeting) => (
               <button
@@ -113,7 +115,7 @@ export default function AdminDashboard() {
                 <span style={styles.link}>Aç</span>
               </button>
             ))}
-            {!meetings.length ? <p style={styles.text}>Henüz toplantı yok.</p> : null}
+            {!meetings.length ? <p style={styles.text}>{t("admin.noMeetings")}</p> : null}
           </div>
         </section>
       </div>

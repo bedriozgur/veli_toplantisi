@@ -1,22 +1,26 @@
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import LanguageToggle from "../../components/LanguageToggle";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function AdminLayout() {
   const { logout, userProfile } = useAuth();
+  const { t } = useLanguage();
 
   return (
     <div style={styles.shell}>
+      <LanguageToggle />
       <aside style={styles.sidebar}>
         <div>
-          <h1 style={styles.brand}>Yönetim</h1>
+          <h1 style={styles.brand}>{t("admin.dashboard")}</h1>
           <p style={styles.meta}>{userProfile?.displayName || "Admin"}</p>
         </div>
 
         <nav style={styles.nav}>
-          <NavLink to="/admin" style={navStyle}>Dashboard</NavLink>
-          <NavLink to="/admin/meetings" style={navStyle}>Toplantılar</NavLink>
-          <NavLink to="/admin/users" style={navStyle}>Kullanıcılar</NavLink>
+          <NavLink to="/admin" style={navStyle}>{t("admin.dashboard")}</NavLink>
+          <NavLink to="/admin/meetings" style={navStyle}>{t("admin.meetings")}</NavLink>
+          <NavLink to="/admin/users" style={navStyle}>{t("admin.users")}</NavLink>
         </nav>
 
         <button onClick={logout} style={styles.logout}>Çıkış Yap</button>

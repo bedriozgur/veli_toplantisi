@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { getUsers } from "../../services/meetingService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function AdminUsers() {
+  const { t } = useLanguage();
   const [users, setUsers] = useState([]);
 
   useEffect(() => {
@@ -12,7 +14,7 @@ export default function AdminUsers() {
     <div style={styles.card}>
       <div style={styles.head}>
         <div>
-          <h2 style={styles.h2}>Kullanıcılar</h2>
+          <h2 style={styles.h2}>{t("admin.users")}</h2>
           <p style={styles.text}>Firebase Auth kullanıcı profilleri ve roller.</p>
         </div>
         <span style={styles.count}>{users.length} kişi</span>
