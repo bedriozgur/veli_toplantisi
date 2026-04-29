@@ -90,6 +90,7 @@ function emptyDemoStore() {
   return {
     meetings: [],
     classesByMeeting: {},
+    teachersByMeeting: {},
     studentsByMeeting: {},
     roomsByMeeting: {},
     accessCodes: {},
@@ -107,6 +108,7 @@ function readDemoStore() {
       ...parsed,
       meetings: Array.isArray(parsed?.meetings) ? parsed.meetings : [],
       classesByMeeting: parsed?.classesByMeeting || {},
+      teachersByMeeting: parsed?.teachersByMeeting || {},
       studentsByMeeting: parsed?.studentsByMeeting || {},
       roomsByMeeting: parsed?.roomsByMeeting || {},
       accessCodes: parsed?.accessCodes || {},
@@ -131,6 +133,11 @@ function readDemoStore() {
           active: true,
         };
         changed = true;
+      }
+    }
+    for (const meeting of next.meetings) {
+      if (!next.teachersByMeeting[meeting.id]) {
+        next.teachersByMeeting[meeting.id] = [];
       }
     }
     if (changed) {
@@ -205,6 +212,14 @@ export async function syncDemoStoreToFirestore() {
         });
       }
     }
+
+    for (const teacher of store.teachersByMeeting?.[meeting.id] || []) {
+      if (!teacher?.id) continue;
+      pushSet(doc(ensureDb(), "meetings", meeting.id, "teachers", teacher.id), {
+        ...teacher,
+        updatedAt: teacher.updatedAt || nowIso(),
+      });
+    }
   }
 
   for (const [code, accessCode] of Object.entries(store.accessCodes || {})) {
@@ -248,6 +263,7 @@ export function seedDemoSchoolData({ replace = false } = {}) {
     next.meetings = [seed.meeting];
     next.users = defaultUsers();
     next.roomsByMeeting[seed.meeting.id] = seed.rooms;
+    next.teachersByMeeting[seed.meeting.id] = buildTeacherCatalogFromClasses(seed.classes);
     next.classesByMeeting[seed.meeting.id] = seed.classes.map((classItem) => ({
       id: classItem.id,
       classLabel: classItem.classLabel,
@@ -268,9 +284,46 @@ export function seedDemoSchoolData({ replace = false } = {}) {
   return readDemoStore();
 }
 
+function buildTeacherCatalogFromClasses(classList = []) {
+  const catalog = new Map();
+
+  for (const classItem of classList) {
+    for (const teacher of classItem.teachers || []) {
+      const current = catalog.get(teacher.id) || {
+        id: teacher.id,
+        name: teacher.name || "",
+        subject: teacher.subject || "",
+        room: teacher.room || "",
+        floor: teacher.floor || "",
+        time: teacher.time || "",
+        status: teacher.status || "active",
+        note: teacher.note || "",
+        order: teacher.order || 0,
+        classIds: [],
+      };
+
+      catalog.set(teacher.id, {
+        ...current,
+        ...teacher,
+        classIds: Array.from(new Set([...(current.classIds || []), classItem.id])),
+      });
+    }
+  }
+
+  return Array.from(catalog.values()).sort((a, b) => {
+    const orderA = Number.isFinite(Number(a.order)) ? Number(a.order) : Number.MAX_SAFE_INTEGER;
+    const orderB = Number.isFinite(Number(b.order)) ? Number(b.order) : Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+}
+
 function ensureMeetingClassArray(store, meetingId) {
   if (!store.classesByMeeting[meetingId]) {
     store.classesByMeeting[meetingId] = [];
+  }
+  if (!store.teachersByMeeting[meetingId]) {
+    store.teachersByMeeting[meetingId] = [];
   }
   if (!store.studentsByMeeting[meetingId]) {
     store.studentsByMeeting[meetingId] = {};
@@ -349,6 +402,11 @@ function hydrateDemoMeetingFromSeed(store, meetingId) {
 
   if ((store.roomsByMeeting[meetingId] || []).length === 0 && seedRooms.length > 0) {
     store.roomsByMeeting[meetingId] = clone(seedRooms);
+    changed = true;
+  }
+
+  if ((store.teachersByMeeting[meetingId] || []).length === 0 && seedClasses.length > 0) {
+    store.teachersByMeeting[meetingId] = buildTeacherCatalogFromClasses(seedClasses);
     changed = true;
   }
 
@@ -711,6 +769,7 @@ export async function createMeeting({ title, date, grades }, adminUid) {
       ensureMeetingClassArray(store, meeting.id);
       const seed = hasFullSchoolSeed() ? buildSeedMeeting() : null;
       const selected = Array.isArray(grades) ? grades : [];
+      store.teachersByMeeting[meeting.id] = seed ? buildTeacherCatalogFromClasses(seed.classes) : [];
       store.accessCodes[meetingCode] = {
         code: meetingCode,
         meetingId: meeting.id,
@@ -790,6 +849,12 @@ export async function createMeeting({ title, date, grades }, adminUid) {
     updatedAt: serverTimestamp(),
   };
   await setDoc(ref, payload);
+  await setDoc(doc(ensureDb(), "meetings", ref.id, "teachers", "__seed__"), {
+    id: "__seed__",
+    seed: true,
+    updatedAt: serverTimestamp(),
+  });
+  await deleteDoc(doc(ensureDb(), "meetings", ref.id, "teachers", "__seed__"));
   await setDoc(doc(ensureDb(), "accessCodes", meetingCode), {
     code: meetingCode,
     meetingId: ref.id,
@@ -826,6 +891,7 @@ export async function deleteMeeting(meetingId) {
     updateDemoStore((store) => {
       store.meetings = store.meetings.filter((meeting) => meeting.id !== meetingId);
       delete store.classesByMeeting[meetingId];
+      delete store.teachersByMeeting[meetingId];
       delete store.studentsByMeeting[meetingId];
       delete store.roomsByMeeting[meetingId];
       Object.keys(store.accessCodes).forEach((code) => {
@@ -839,6 +905,7 @@ export async function deleteMeeting(meetingId) {
   }
 
   const classes = await getClasses(meetingId);
+  const teachers = await getTeachers(meetingId);
   const batch = writeBatch(ensureDb());
 
   for (const classItem of classes) {
@@ -852,6 +919,10 @@ export async function deleteMeeting(meetingId) {
     }
   }
 
+  for (const teacher of teachers) {
+    batch.delete(doc(ensureDb(), "meetings", meetingId, "teachers", teacher.id));
+  }
+
   batch.delete(doc(ensureDb(), "meetings", meetingId));
   await batch.commit();
 }
@@ -861,6 +932,10 @@ export async function deleteClass(meetingId, classId) {
     updateDemoStore((store) => {
       ensureMeetingClassArray(store, meetingId);
       store.classesByMeeting[meetingId] = (store.classesByMeeting[meetingId] || []).filter((item) => item.id !== classId);
+      store.teachersByMeeting[meetingId] = (store.teachersByMeeting[meetingId] || []).map((teacher) => ({
+        ...teacher,
+        classIds: (teacher.classIds || []).filter((currentClassId) => currentClassId !== classId),
+      }));
       if (store.studentsByMeeting[meetingId]) {
         delete store.studentsByMeeting[meetingId][classId];
       }
@@ -888,6 +963,13 @@ export async function deleteClass(meetingId, classId) {
   if (match) {
     await deleteDoc(doc(ensureDb(), "accessCodes", match.id));
   }
+
+  const teachers = await getTeachers(meetingId);
+  const nextTeachers = teachers.map((teacher) => ({
+    ...teacher,
+    classIds: (teacher.classIds || []).filter((currentClassId) => currentClassId !== classId),
+  }));
+  await replaceTeachers(meetingId, nextTeachers);
 }
 
 export async function getClasses(meetingId) {
@@ -932,6 +1014,48 @@ export function subscribeRooms(meetingId, onUpdate) {
   return onSnapshot(collection(ensureDb(), "meetings", meetingId, "rooms"), (snap) => {
     onUpdate(sortRooms(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
   });
+}
+
+export async function getTeachers(meetingId) {
+  if (!hasFirestore()) {
+    return clone(readDemoStore().teachersByMeeting[meetingId] || []);
+  }
+
+  const snap = await getDocs(collection(ensureDb(), "meetings", meetingId, "teachers"));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((teacher) => teacher.id !== "__seed__");
+}
+
+export async function replaceTeachers(meetingId, teachers) {
+  if (!hasFirestore()) {
+    updateDemoStore((store) => {
+      ensureMeetingClassArray(store, meetingId);
+      store.teachersByMeeting[meetingId] = (teachers || []).map((teacher, index) => ({
+        ...teacher,
+        id: teacher.id || `teacher-${index + 1}`,
+        order: Number.isFinite(Number(teacher.order)) ? Number(teacher.order) : index + 1,
+      }));
+      return store;
+    });
+    return;
+  }
+
+  const existing = await getDocs(collection(ensureDb(), "meetings", meetingId, "teachers"));
+  const batch = writeBatch(ensureDb());
+  existing.docs.forEach((snap) => batch.delete(snap.ref));
+
+  for (const [index, teacher] of (teachers || []).entries()) {
+    const teacherId = teacher.id || `teacher-${index + 1}`;
+    batch.set(doc(ensureDb(), "meetings", meetingId, "teachers", teacherId), {
+      ...teacher,
+      id: teacherId,
+      order: Number.isFinite(Number(teacher.order)) ? Number(teacher.order) : index + 1,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
 }
 
 export async function createRoom(meetingId, roomData) {

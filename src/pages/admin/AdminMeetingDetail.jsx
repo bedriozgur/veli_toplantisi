@@ -7,6 +7,8 @@ import {
   deleteClass,
   getClasses,
   getMeeting,
+  getTeachers,
+  replaceTeachers,
   updateClassTeachers,
   updateMeeting,
 } from "../../services/meetingService";
@@ -41,9 +43,10 @@ export default function AdminMeetingDetail() {
   async function refresh() {
     try {
       setError("");
-      const [meetingData, classData] = await Promise.all([
+      const [meetingData, classData, teacherData] = await Promise.all([
         getMeeting(meetingId),
         getClasses(meetingId),
+        getTeachers(meetingId),
       ]);
       setMeeting(meetingData);
       setMeetingDraft({
@@ -52,7 +55,7 @@ export default function AdminMeetingDetail() {
         status: meetingData?.status || "draft",
       });
       setClasses(classData);
-      setTeacherCatalog((previous) => buildTeacherCatalog(classData, previous));
+      setTeacherCatalog(buildTeacherCatalog(classData, teacherData));
     } catch {
       setMeeting(null);
       setClasses([]);
@@ -162,6 +165,7 @@ export default function AdminMeetingDetail() {
     setMessage("");
     setError("");
     try {
+      await replaceTeachers(meetingId, teacherCatalog);
       for (const classItem of classes) {
         const assignedTeachers = teacherCatalog
           .filter((teacher) => (teacher.classIds || []).includes(classItem.id))
