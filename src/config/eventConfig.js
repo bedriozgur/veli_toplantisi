@@ -32,11 +32,25 @@ export function schoolInitials(name) {
     .join("");
 }
 
+export function normalizeSchoolName(value) {
+  const school = String(value || "").trim();
+  if (!school) return DEFAULT_SCHOOL;
+  if (/oakwood/i.test(school)) return DEFAULT_SCHOOL;
+  return school;
+}
+
+export function normalizeEventName(value) {
+  const evtName = String(value || "").trim();
+  if (!evtName) return DEFAULT_EVENT;
+  if (/oakwood academy/i.test(evtName)) return DEFAULT_EVENT;
+  return evtName;
+}
+
 export function normalizeAdminState(raw) {
   return {
-    school: raw?.school || DEFAULT_SCHOOL,
+    school: normalizeSchoolName(raw?.school),
     schoolLogo: raw?.schoolLogo || "",
-    evtName: raw?.evtName || DEFAULT_EVENT,
+    evtName: normalizeEventName(raw?.evtName),
     evtDate: raw?.evtDate || "",
     startTime: raw?.startTime || DEFAULT_START_TIME,
     endTime: raw?.endTime || DEFAULT_END_TIME,

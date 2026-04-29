@@ -23,6 +23,8 @@ import {
   isEventExpired,
   makeEventCode,
   normalizeAdminState,
+  normalizeEventName,
+  normalizeSchoolName,
 } from "./config/eventConfig";
 import {
   CLASS_TEMPLATE_CSV,
@@ -189,9 +191,9 @@ function loadMeetingLibrary() {
         label: item.label || item.evtName || "Saved meeting",
         createdAt: item.createdAt || new Date().toISOString(),
         ...buildEventPayload({
-          school: item.school || DEFAULT_SCHOOL,
+          school: normalizeSchoolName(item.school || DEFAULT_SCHOOL),
           schoolLogo: item.schoolLogo || "",
-          evtName: item.evtName || DEFAULT_EVENT,
+          evtName: normalizeEventName(item.evtName || DEFAULT_EVENT),
           evtDate: item.evtDate || "",
           startTime: item.startTime || DEFAULT_START_TIME,
           endTime: item.endTime || DEFAULT_END_TIME,
@@ -212,6 +214,8 @@ function loadMeetingLibrary() {
 function normalizeMeetingSnapshot(snapshot) {
   return {
     ...snapshot,
+    school: normalizeSchoolName(snapshot?.school || DEFAULT_SCHOOL),
+    evtName: normalizeEventName(snapshot?.evtName || DEFAULT_EVENT),
     teachers: Array.isArray(snapshot?.teachers) ? snapshot.teachers.map((teacher) => ({ ...teacher })) : [],
     classes: Array.isArray(snapshot?.classes)
       ? snapshot.classes.map((cls) => ({ ...cls, tids: Array.isArray(cls?.tids) ? [...cls.tids] : [] }))
@@ -357,6 +361,28 @@ export default function App() {
           setClasses(state.classes);
           setStudents(state.students);
           setMeetingLibrary(loadMeetingLibrary());
+          safeSetStorage(
+            STORAGE_KEY,
+            JSON.stringify(
+              buildEventPayload({
+                school: state.school,
+                schoolLogo: state.schoolLogo,
+                evtName: state.evtName,
+                evtDate: state.evtDate,
+                startTime: state.startTime,
+                endTime: state.endTime,
+                notesEmail: state.notesEmail,
+                eventCode: state.eventCode,
+                eventStatus: state.eventStatus,
+                expiresAt: state.expiresAt,
+                landingHelpText: state.landingHelpText,
+                landingNoteText: state.landingNoteText,
+                teachers: state.teachers,
+                classes: state.classes,
+                students: state.students,
+              })
+            )
+          );
         }
         if (!saved) setMeetingLibrary(loadMeetingLibrary());
 
@@ -741,9 +767,9 @@ export default function App() {
 
   const loadMeetingSnapshot = (snapshot) => {
     if (!snapshot) return;
-    setSchool(snapshot.school || DEFAULT_SCHOOL);
+    setSchool(normalizeSchoolName(snapshot.school || DEFAULT_SCHOOL));
     setSchoolLogo(snapshot.schoolLogo || "");
-    setEvtName(snapshot.evtName || DEFAULT_EVENT);
+    setEvtName(normalizeEventName(snapshot.evtName || DEFAULT_EVENT));
     setEvtDate(snapshot.evtDate || "");
     setStartTime(snapshot.startTime || DEFAULT_START_TIME);
     setEndTime(snapshot.endTime || DEFAULT_END_TIME);
