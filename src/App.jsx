@@ -203,6 +203,7 @@ export default function App() {
   const [showAdminGate, setShowAdminGate] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [pinError, setPinError] = useState("");
+  const [pendingStaffMode, setPendingStaffMode] = useState("admin");
   const [landingCode, setLandingCode] = useState("");
   const [landingError, setLandingError] = useState("");
   const [language, setLanguage] = useState(() => safeGetStorage("portal_lang") || "en");
@@ -343,7 +344,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (mode !== "admin") return;
+    if (mode !== "admin" && mode !== "frontdesk") return;
     safeSetStorage(
       STORAGE_KEY,
       JSON.stringify({
@@ -539,22 +540,26 @@ export default function App() {
     }
   };
 
-  const openAdminView = () => {
+  const openStaffView = (nextMode) => {
+    setPendingStaffMode(nextMode);
     if (adminUnlocked) {
       window.location.hash = "";
-      setMode("admin");
+      setMode(nextMode);
       return;
     }
     if (!adminPin) {
       window.location.hash = "";
       setAdminUnlocked(true);
-      setMode("admin");
+      setMode(nextMode);
       return;
     }
     setPinDraft("");
     setPinError("");
     setShowAdminGate(true);
   };
+
+  const openAdminView = () => openStaffView("admin");
+  const openFrontDeskView = () => openStaffView("frontdesk");
 
   const goHome = () => {
     window.location.hash = "";
@@ -568,7 +573,7 @@ export default function App() {
       setPinDraft("");
       setPinError("");
       window.location.hash = "";
-      setMode("admin");
+      setMode(pendingStaffMode || "admin");
       return;
     }
     setPinError("Incorrect PIN");
@@ -580,6 +585,7 @@ export default function App() {
     setPinDraft("");
     setPinError("");
     goHome();
+    setPendingStaffMode("admin");
   };
 
   const resetDemoData = () => {
@@ -792,6 +798,39 @@ export default function App() {
     );
   }
 
+  if (mode === "frontdesk") {
+    return (
+      <FrontDeskView
+        logoSrc={resolvedLogo}
+        school={school}
+        schoolLogo={schoolLogo}
+        evtName={evtName}
+        evtDate={evtDate}
+        startTime={startTime}
+        endTime={endTime}
+        students={students}
+        classes={classes}
+        onBack={goHome}
+        onLock={lockAdmin}
+        onMarkArrived={(studentId) => {
+          setStudents((previous) =>
+            previous.map((student) => {
+              if (student.id !== studentId) return student;
+              const arrivedAt = student.arrivedAt ? null : new Date().toISOString();
+              return {
+                ...student,
+                arrivedAt,
+                arrivedMarkedBy: arrivedAt ? "frontdesk" : null,
+              };
+            })
+          );
+        }}
+        language={language}
+        setLanguage={setLanguage}
+      />
+    );
+  }
+
   if (mode === "home") {
     return (
       <>
@@ -801,6 +840,7 @@ export default function App() {
           publishState={publishState}
           onOpenEntrance={openEntranceByCode}
           onOpenAdmin={openAdminView}
+          onOpenFrontDesk={openFrontDeskView}
           adminConfigured={Boolean(adminPin)}
           landingCode={landingCode}
           setLandingCode={setLandingCode}
@@ -1057,6 +1097,7 @@ function HomeView({
   publishState,
   onOpenEntrance,
   onOpenAdmin,
+  onOpenFrontDesk,
   adminConfigured,
   landingCode,
   setLandingCode,
@@ -1153,6 +1194,23 @@ function HomeView({
       </div>
 
       <div style={{ background: "#FFFFFF", padding: "10px 16px 24px", textAlign: "center" }}>
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 10 }}>
+          <button
+            onClick={onOpenFrontDesk}
+            style={{
+              background: "transparent",
+              color: "rgba(58, 86, 115, 0.72)",
+              border: "1px solid rgba(58, 86, 115, 0.18)",
+              borderRadius: 999,
+              padding: "10px 14px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Front desk
+          </button>
+        </div>
         <button
           onClick={onOpenAdmin}
           style={{
@@ -1795,6 +1853,7 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
               <div style={{ fontSize: 13, color: cls ? "#9A9A9A" : "#D44", marginTop: 3 }}>
                 {cls ? `${cls.name} · ${activeTeacherCount} teacher${activeTeacherCount !== 1 ? "s" : ""}` : "⚠ No class assigned"}
                 {s.parent ? ` · ${s.parent}` : ""}
+                {s.arrivedAt ? " · arrived" : ""}
               </div>
             </div>
             <button onClick={() => setQrStuId(qrStuId === s.id ? null : s.id)} style={{ background: qrStuId === s.id ? G : "#E8F0EC", color: qrStuId === s.id ? "white" : G, border: "none", borderRadius: 9, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -1803,6 +1862,126 @@ function StudentsTab({ students, setStudents, classes, teachers, studentUrl, qrS
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function FrontDeskView({ logoSrc, school, schoolLogo, evtName, evtDate, startTime, endTime, students, classes, onBack, onLock, onMarkArrived, language, setLanguage }) {
+  const [search, setSearch] = useState("");
+  const [filterClass, setFilterClass] = useState("all");
+
+  const classMap = useMemo(() => new Map(classes.map((cls) => [cls.id, cls])), [classes]);
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return students
+      .filter((student) => filterClass === "all" || String(student.cid) === String(filterClass))
+      .filter((student) => {
+        if (!term) return true;
+        const cls = classMap.get(student.cid);
+        return [
+          student.child,
+          student.parent,
+          cls?.name,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term));
+      })
+      .map((student) => ({
+        student,
+        cls: classMap.get(student.cid),
+      }));
+  }, [students, search, filterClass, classMap]);
+
+  const arrivedCount = students.filter((student) => Boolean(student.arrivedAt)).length;
+  const waitingCount = students.length - arrivedCount;
+
+  return (
+    <div style={{ minHeight: "100vh", background: CR, fontFamily: "'DM Sans',sans-serif", maxWidth: 520, margin: "0 auto", position: "relative", paddingBottom: 34 }}>
+      <LanguageToggle language={language} setLanguage={setLanguage} dark />
+      <div style={{ background: G, padding: "22px 20px 18px", color: "white" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            ← Home
+          </button>
+          <button onClick={onLock} style={{ background: "rgba(255,255,255,0.12)", color: "white", border: "none", borderRadius: 999, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            Lock staff
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <img src={logoSrc || schoolLogo || logoImg} alt={`${school} logo`} style={{ width: 48, height: 48, borderRadius: 14, objectFit: "contain", background: "#FFFFFF", padding: 6, boxSizing: "border-box", flexShrink: 0 }} />
+          <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 28, fontWeight: 800, lineHeight: 1.05 }}>{school || "Front desk"}</div>
+        </div>
+        <div style={{ fontSize: 15, opacity: 0.88 }}>Geliş kaydı ve hızlı sınıf arama</div>
+        <div style={{ fontSize: 12, opacity: 0.58, marginTop: 4 }}>
+          {[evtDate ? fmtDate(evtDate) : "", fmtEventWindow(startTime, endTime), evtName || ""].filter(Boolean).join(" · ")}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 18, marginBottom: 4 }}>
+          {[
+            { label: "Students", value: students.length },
+            { label: "Arrived", value: arrivedCount },
+            { label: "Waiting", value: waitingCount },
+          ].map((item) => (
+            <div key={item.label} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 8px", textAlign: "center" }}>
+              <div style={{ fontFamily: "'Manrope',sans-serif", fontSize: 22, fontWeight: 800 }}>{item.value}</div>
+              <div style={{ fontSize: 11, opacity: 0.72, marginTop: 2 }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "14px 16px 20px" }}>
+        <Card>
+          <SLabel>Search</SLabel>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Student, parent, or class"
+            style={{ ...iBase, marginBottom: 10 }}
+          />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <Chip label={`All (${students.length})`} active={filterClass === "all"} onClick={() => setFilterClass("all")} />
+            {classes.map((cls) => {
+              const count = students.filter((student) => String(student.cid) === String(cls.id)).length;
+              return <Chip key={cls.id} label={`${cls.name} (${count})`} active={String(filterClass) === String(cls.id)} onClick={() => setFilterClass(String(cls.id))} />;
+            })}
+          </div>
+        </Card>
+
+        <Row>
+          <SHead>Results <N n={rows.length} /></SHead>
+        </Row>
+
+        {rows.map(({ student, cls }) => {
+          const arrived = Boolean(student.arrivedAt);
+          return (
+            <div key={student.id} style={{ background: "white", borderRadius: 14, padding: "13px 16px", marginBottom: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 17, fontWeight: 800 }}>{student.child}</div>
+                <div style={{ fontSize: 13, color: cls ? "#9A9A9A" : "#D44", marginTop: 3 }}>
+                  {cls ? `${cls.name}${student.parent ? ` · ${student.parent}` : ""}` : "⚠ No class assigned"}
+                  {arrived ? " · arrived" : ""}
+                </div>
+              </div>
+              <button
+                onClick={() => onMarkArrived(student.id)}
+                style={{
+                  background: arrived ? "#E8F0EC" : G,
+                  color: arrived ? G : "white",
+                  border: "none",
+                  borderRadius: 9,
+                  padding: "8px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {arrived ? "Undo" : "Arrived"}
+              </button>
+            </div>
+          );
+        })}
+        {!rows.length && <Empty>No matches found.</Empty>}
+      </div>
     </div>
   );
 }

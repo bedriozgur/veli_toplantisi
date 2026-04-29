@@ -28,6 +28,8 @@ export function normalizeStudents(input) {
     child: s?.child || "",
     parent: s?.parent || "",
     cid: Number.isFinite(Number(s?.cid)) ? Number(s.cid) : null,
+    arrivedAt: s?.arrivedAt || null,
+    arrivedMarkedBy: s?.arrivedMarkedBy || null,
   }));
 }
 
