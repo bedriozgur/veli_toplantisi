@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, db, doc, getDoc, isFirebaseConfigured } from "../firebase";
+import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/meetingService";
 
 const AuthContext = createContext(null);
 const DEMO_STORAGE_KEY = "veli_toplantisi_demo_user";
@@ -55,6 +56,9 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
+      if (!hasFullSchoolSeed()) {
+        seedDemoSchoolData({ replace: true });
+      }
       const existing = loadDemoUser();
       setCurrentUser(existing);
       setUserProfile(existing);
