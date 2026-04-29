@@ -12,6 +12,7 @@ import {
   writeBatch,
   Timestamp,
 } from "../firebase";
+import { isDemoStoreForced } from "../firebase";
 import { generateAccessCode } from "../utils/accessCode";
 
 const DEMO_STORE_KEY = "veli_toplantisi_demo_store_v1";
@@ -47,7 +48,7 @@ function ensureDb() {
 }
 
 function hasFirestore() {
-  return Boolean(db);
+  return Boolean(db) && !isDemoStoreForced();
 }
 
 function clone(value) {

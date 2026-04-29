@@ -5,7 +5,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { auth, db, doc, getDoc, isFirebaseConfigured } from "../firebase";
+import { auth, db, doc, getDoc, isFirebaseConfigured, setDemoStoreForced } from "../firebase";
 import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/demoSeed";
 import { setDoc } from "firebase/firestore";
 
@@ -88,6 +88,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
+      setDemoStoreForced(true);
       if (!hasFullSchoolSeed()) {
         seedDemoSchoolData({ replace: true });
       }
@@ -117,6 +118,7 @@ export function AuthProvider({ children }) {
     }
     const tempAccount = tempAccountForLogin(email, password);
     if (tempAccount) {
+      setDemoStoreForced(true);
       let credential;
       try {
         credential = await signInWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
@@ -142,10 +144,12 @@ export function AuthProvider({ children }) {
       }
       return credential;
     }
+    setDemoStoreForced(false);
     return signInWithEmailAndPassword(auth, email, password);
   }, []);
 
   const loginAsDemo = useCallback(async (role = "admin") => {
+    setDemoStoreForced(true);
     const normalizedRole = role === "frontdesk" ? "frontdesk" : "admin";
     const demo = {
       uid: `demo-${normalizedRole}`,
@@ -161,6 +165,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    setDemoStoreForced(false);
     if (!isFirebaseConfigured || !auth) {
       saveDemoUser(null);
       setCurrentUser(null);

@@ -35,6 +35,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || PUBLIC_FIREBASE_CONFIG.appId,
 };
 
+const DEMO_STORE_FLAG = "veli_toplantisi_force_demo_store";
+
 function hasRequiredConfig() {
   return Boolean(
     firebaseConfig.apiKey &&
@@ -52,6 +54,25 @@ if (hasRequiredConfig()) {
 export const isFirebaseConfigured = hasRequiredConfig();
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
+
+export function isDemoStoreForced() {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(DEMO_STORE_FLAG) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setDemoStoreForced(forced) {
+  try {
+    if (typeof window === "undefined") return;
+    if (forced) {
+      window.localStorage.setItem(DEMO_STORE_FLAG, "1");
+    } else {
+      window.localStorage.removeItem(DEMO_STORE_FLAG);
+    }
+  } catch {}
+}
 
 export {
   collection,
