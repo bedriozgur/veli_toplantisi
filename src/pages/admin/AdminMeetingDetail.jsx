@@ -453,10 +453,7 @@ export default function AdminMeetingDetail() {
                 <summary style={styles.disclosureSummary}>
                   <div>
                     <h3 style={styles.cardTitle}>{teacher.name || t("admin.detailTeacherLabel")}</h3>
-                    <p style={styles.cardText}>
-                      {teacher.subject || t("admin.detailTeacherSubject")} · {teacher.room || t("admin.detailTeacherRoom")} ·{" "}
-                      {(teacher.classIds || []).length} {t("admin.detailTeacherLabel")}
-                    </p>
+                    <p style={styles.cardText}>{buildTeacherSummary(teacher, t)}</p>
                   </div>
                   <span style={styles.disclosureHint}>{t("admin.detailClickToEdit")}</span>
                 </summary>
@@ -556,10 +553,13 @@ function buildTeacherCatalog(classList, previous = []) {
         classIds: [],
       };
 
+      const classIds = Array.from(new Set([...(current.classIds || []), classItem.id]));
       catalog.set(teacher.id, {
         ...current,
         ...teacher,
-        classIds: Array.from(new Set([...(current.classIds || []), classItem.id])),
+        room: current.room || teacher.room || "",
+        floor: current.floor || teacher.floor || "",
+        classIds,
       });
     }
   }
@@ -570,6 +570,14 @@ function buildTeacherCatalog(classList, previous = []) {
     if (orderA !== orderB) return orderA - orderB;
     return String(a.name || "").localeCompare(String(b.name || ""));
   });
+}
+
+function buildTeacherSummary(teacher, t) {
+  const subject = teacher.subject || t("admin.detailTeacherSubject");
+  const locationParts = [teacher.floor || "", teacher.room || ""].filter(Boolean);
+  const location = locationParts.length ? locationParts.join(" - ") : t("admin.detailTeacherLocation");
+  const classCount = `${(teacher.classIds || []).length} ${t("admin.detailClassUnit")}`;
+  return [subject, location, classCount].join(" · ");
 }
 
 function splitClassName(className) {
