@@ -405,58 +405,63 @@ export default function AdminMeetingDetail() {
             </div>
           </div>
 
-          <div style={styles.subcard}>
-            <div>
-              <h3 style={styles.subcardTitle}>{t("admin.detailRoomSection")}</h3>
-              <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
+          <details style={styles.disclosure}>
+            <summary style={styles.disclosureSummary}>
+              <div>
+                <h3 style={styles.subcardTitle}>{t("admin.detailRoomSection")}</h3>
+                <p style={styles.cardText}>{t("admin.detailRoomHelp")}</p>
+              </div>
+              <span style={styles.disclosureHint}>{t("admin.detailClickToEdit")}</span>
+            </summary>
+            <div style={styles.disclosureBody}>
+              <div style={styles.roomAddRow}>
+                <input
+                  value={roomDraft.name}
+                  onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder={t("admin.detailRoomName")}
+                  style={styles.input}
+                />
+                <input
+                  value={roomDraft.floor}
+                  onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
+                  placeholder={t("admin.detailFloor")}
+                  style={styles.input}
+                />
+                <button type="button" onClick={addRoom} style={styles.primaryButtonSmall} disabled={busy === "room"}>
+                  {t("admin.detailAddRoom")}
+                </button>
+              </div>
+              <div style={styles.roomList}>
+                {rooms.map((room) => (
+                  <div key={room.id} style={styles.roomItem}>
+                    <input
+                      value={room.name || ""}
+                      onChange={(event) =>
+                        setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, name: event.target.value })))
+                      }
+                      placeholder={t("admin.detailRoomName")}
+                      style={styles.input}
+                    />
+                    <input
+                      value={room.floor || ""}
+                      onChange={(event) =>
+                        setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, floor: event.target.value })))
+                      }
+                      placeholder={t("admin.detailFloor")}
+                      style={styles.input}
+                    />
+                    <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
+                      {t("admin.detailSaveRoom")}
+                    </button>
+                    <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
+                      {t("admin.detailDeleteRoom")}
+                    </button>
+                  </div>
+                ))}
+                {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
+              </div>
             </div>
-            <div style={styles.roomAddRow}>
-              <input
-                value={roomDraft.name}
-                onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder={t("admin.detailRoomName")}
-                style={styles.input}
-              />
-              <input
-                value={roomDraft.floor}
-                onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
-                placeholder={t("admin.detailFloor")}
-                style={styles.input}
-              />
-              <button type="button" onClick={addRoom} style={styles.primaryButtonSmall} disabled={busy === "room"}>
-                {t("admin.detailAddRoom")}
-              </button>
-            </div>
-            <div style={styles.roomList}>
-              {rooms.map((room) => (
-                <div key={room.id} style={styles.roomItem}>
-                  <input
-                    value={room.name || ""}
-                    onChange={(event) =>
-                      setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, name: event.target.value })))
-                    }
-                    placeholder={t("admin.detailRoomName")}
-                    style={styles.input}
-                  />
-                  <input
-                    value={room.floor || ""}
-                    onChange={(event) =>
-                      setRooms((previous) => previous.map((item) => (item.id !== room.id ? item : { ...item, floor: event.target.value })))
-                    }
-                    placeholder={t("admin.detailFloor")}
-                    style={styles.input}
-                  />
-                  <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
-                    {t("admin.detailSaveRoom")}
-                  </button>
-                  <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
-                    {t("admin.detailDeleteRoom")}
-                  </button>
-                </div>
-              ))}
-              {!rooms.length ? <p style={styles.cardText}>{t("admin.detailNoRooms")}</p> : null}
-            </div>
-          </div>
+          </details>
 
           <div style={styles.toolbar}>
             <button
@@ -489,41 +494,43 @@ export default function AdminMeetingDetail() {
 
           <div style={styles.grid}>
             {classes.map((classItem) => (
-              <article key={classItem.id} style={styles.classCard}>
-                <div style={styles.cardHead}>
+              <details key={classItem.id} style={styles.disclosure}>
+                <summary style={styles.disclosureSummary}>
                   <div>
                     <h3 style={styles.cardTitle}>{classItem.classLabel || classItem.id}</h3>
                     <p style={styles.cardText}>
-                      {t("admin.detailClassCode")}: <strong>{classItem.accessCode || t("admin.detailNone")}</strong>
+                      {t("admin.detailClassCode")}: <strong>{classItem.accessCode || t("admin.detailNone")}</strong> ·{" "}
+                      {(teachersByClass.get(classItem.id) || []).length} {t("admin.detailTeacherLabel")}
                     </p>
                   </div>
-                  <span style={styles.pill}>{(teachersByClass.get(classItem.id) || []).length} {t("admin.detailTeacherLabel")}</span>
-                </div>
+                  <span style={styles.disclosureHint}>{t("admin.detailClickToEdit")}</span>
+                </summary>
+                <div style={styles.disclosureBody}>
+                  <div style={styles.teacherPicks}>
+                    {teacherList.length ? (
+                      teacherList.map((teacher) => {
+                        const checked = (teacher.classIds || []).includes(classItem.id);
+                        return (
+                          <label key={teacher.id} style={styles.checkRow}>
+                            <input type="checkbox" checked={checked} onChange={() => toggleTeacherClass(teacher.id, classItem.id)} />
+                            <span>
+                              {teacher.name || t("admin.detailTeacherLabel")}
+                              {teacher.subject ? ` · ${teacher.subject}` : ""}
+                            </span>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <p style={styles.cardText}>{t("admin.detailNoTeachersCatalog")}</p>
+                    )}
+                  </div>
 
-                <div style={styles.teacherPicks}>
-                  {teacherList.length ? (
-                    teacherList.map((teacher) => {
-                      const checked = (teacher.classIds || []).includes(classItem.id);
-                      return (
-                        <label key={teacher.id} style={styles.checkRow}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleTeacherClass(teacher.id, classItem.id)} />
-                          <span>
-                            {teacher.name || t("admin.detailTeacherLabel")}
-                            {teacher.subject ? ` · ${teacher.subject}` : ""}
-                          </span>
-                        </label>
-                      );
-                    })
-                  ) : (
-                    <p style={styles.cardText}>{t("admin.detailNoTeachersCatalog")}</p>
-                  )}
+                  <div style={styles.teacherSummary}>
+                    <span>{t("admin.detailClassTeachers")}</span>
+                    <span>{(teachersByClass.get(classItem.id) || []).map((teacher) => teacher.name || t("admin.detailTeacherLabel")).join(", ") || t("admin.detailNone")}</span>
+                  </div>
                 </div>
-
-                <div style={styles.teacherSummary}>
-                  <span>{t("admin.detailClassTeachers")}</span>
-                  <span>{(teachersByClass.get(classItem.id) || []).map((teacher) => teacher.name || t("admin.detailTeacherLabel")).join(", ") || t("admin.detailNone")}</span>
-                </div>
-              </article>
+              </details>
             ))}
             {!classes.length ? <div style={styles.card}>{t("admin.detailNoClasses")}</div> : null}
           </div>
@@ -549,63 +556,75 @@ export default function AdminMeetingDetail() {
 
           <div style={styles.teacherCatalog}>
             {teacherList.map((teacher) => (
-              <article key={teacher.id} style={styles.teacherCard}>
-                <div style={styles.teacherGrid}>
-                  <input
-                    value={teacher.name || ""}
-                    onChange={(event) => updateTeacherField(teacher.id, "name", event.target.value)}
-                    placeholder={t("admin.detailTeacherName")}
-                    style={styles.input}
-                  />
-                  <input
-                    value={teacher.subject || ""}
-                    onChange={(event) => updateTeacherField(teacher.id, "subject", event.target.value)}
-                    placeholder={t("admin.detailTeacherSubject")}
-                    style={styles.input}
-                  />
-                  <input
-                    value={teacher.room || ""}
-                    onChange={(event) => updateTeacherField(teacher.id, "room", event.target.value)}
-                    placeholder={t("admin.detailTeacherRoom")}
-                    style={styles.input}
-                  />
-                  <input
-                    value={teacher.floor || ""}
-                    onChange={(event) => updateTeacherField(teacher.id, "floor", event.target.value)}
-                    placeholder={t("admin.detailTeacherFloor")}
-                    style={styles.input}
-                  />
-                </div>
-
-                <div style={styles.teacherActions}>
-                  <label style={styles.checkRow}>
+              <details key={teacher.id} style={styles.disclosure}>
+                <summary style={styles.disclosureSummary}>
+                  <div>
+                    <h3 style={styles.cardTitle}>{teacher.name || t("admin.detailTeacherLabel")}</h3>
+                    <p style={styles.cardText}>
+                      {teacher.subject || t("admin.detailTeacherSubject")} · {teacher.room || t("admin.detailTeacherRoom")} ·{" "}
+                      {(teacher.classIds || []).length} {t("admin.detailTeacherLabel")}
+                    </p>
+                  </div>
+                  <span style={styles.disclosureHint}>{t("admin.detailClickToEdit")}</span>
+                </summary>
+                <div style={styles.disclosureBody}>
+                  <div style={styles.teacherGrid}>
                     <input
-                      type="checkbox"
-                      checked={teacher.status !== "unavailable"}
-                      onChange={(event) => updateTeacherField(teacher.id, "status", event.target.checked ? "active" : "unavailable")}
+                      value={teacher.name || ""}
+                      onChange={(event) => updateTeacherField(teacher.id, "name", event.target.value)}
+                      placeholder={t("admin.detailTeacherName")}
+                      style={styles.input}
                     />
-                    <span>{teacher.status !== "unavailable" ? t("admin.detailTeacherActive") : t("admin.detailTeacherInactive")}</span>
-                  </label>
-                  <button type="button" onClick={() => removeTeacher(teacher.id)} style={styles.linkButton}>
-                    {t("admin.detailTeacherRemove")}
-                  </button>
-                </div>
+                    <input
+                      value={teacher.subject || ""}
+                      onChange={(event) => updateTeacherField(teacher.id, "subject", event.target.value)}
+                      placeholder={t("admin.detailTeacherSubject")}
+                      style={styles.input}
+                    />
+                    <input
+                      value={teacher.room || ""}
+                      onChange={(event) => updateTeacherField(teacher.id, "room", event.target.value)}
+                      placeholder={t("admin.detailTeacherRoom")}
+                      style={styles.input}
+                    />
+                    <input
+                      value={teacher.floor || ""}
+                      onChange={(event) => updateTeacherField(teacher.id, "floor", event.target.value)}
+                      placeholder={t("admin.detailTeacherFloor")}
+                      style={styles.input}
+                    />
+                  </div>
 
-                <div>
-                  <p style={styles.selectionLabel}>{t("admin.detailTeacherClassHint")}</p>
-                  <div style={styles.teacherClassGrid}>
-                    {classes.map((classItem) => {
-                      const checked = (teacher.classIds || []).includes(classItem.id);
-                      return (
-                        <label key={classItem.id} style={styles.checkRow}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleTeacherClass(teacher.id, classItem.id)} />
-                          <span>{classItem.classLabel || classItem.id}</span>
-                        </label>
-                      );
-                    })}
+                  <div style={styles.teacherActions}>
+                    <label style={styles.checkRow}>
+                      <input
+                        type="checkbox"
+                        checked={teacher.status !== "unavailable"}
+                        onChange={(event) => updateTeacherField(teacher.id, "status", event.target.checked ? "active" : "unavailable")}
+                      />
+                      <span>{teacher.status !== "unavailable" ? t("admin.detailTeacherActive") : t("admin.detailTeacherInactive")}</span>
+                    </label>
+                    <button type="button" onClick={() => removeTeacher(teacher.id)} style={styles.linkButton}>
+                      {t("admin.detailTeacherRemove")}
+                    </button>
+                  </div>
+
+                  <div>
+                    <p style={styles.selectionLabel}>{t("admin.detailTeacherClassHint")}</p>
+                    <div style={styles.teacherClassGrid}>
+                      {classes.map((classItem) => {
+                        const checked = (teacher.classIds || []).includes(classItem.id);
+                        return (
+                          <label key={classItem.id} style={styles.checkRow}>
+                            <input type="checkbox" checked={checked} onChange={() => toggleTeacherClass(teacher.id, classItem.id)} />
+                            <span>{classItem.classLabel || classItem.id}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </article>
+              </details>
             ))}
             {!teacherList.length ? <p style={styles.cardText}>{t("admin.detailNoTeachersCatalog")}</p> : null}
           </div>
@@ -807,6 +826,41 @@ const styles = {
   subcardTitle: {
     margin: 0,
     fontSize: 18,
+  },
+  disclosure: {
+    display: "grid",
+    gap: 0,
+    border: "1px solid #e5e7eb",
+    borderRadius: 18,
+    background: "#fff",
+    overflow: "hidden",
+  },
+  disclosureSummary: {
+    listStyle: "none",
+    cursor: "pointer",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    padding: "16px 18px",
+    background: "#fafafa",
+  },
+  disclosureBody: {
+    display: "grid",
+    gap: 14,
+    padding: 18,
+    borderTop: "1px solid #eef2f7",
+  },
+  disclosureHint: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.45rem 0.75rem",
+    borderRadius: 999,
+    background: "#e5eefc",
+    color: "#1d4ed8",
+    fontSize: 12,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
   },
   cardTitle: {
     margin: 0,
