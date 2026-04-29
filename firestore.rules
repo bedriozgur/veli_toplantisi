@@ -37,6 +37,11 @@ service cloud.firestore {
       allow read: if isAdmin() || isFrontDesk();
       allow create, update, delete: if isAdmin();
 
+      match /rooms/{roomId} {
+        allow read: if isAdmin() || isFrontDesk() || meetingIsActive(meetingId);
+        allow create, update, delete: if isAdmin();
+      }
+
       match /classes/{classId} {
         allow read: if isAdmin() || isFrontDesk() || (meetingIsActive(meetingId) && codeIsValid(resource.data.accessCode));
         allow create, update, delete: if isAdmin();

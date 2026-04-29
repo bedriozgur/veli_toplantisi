@@ -1,7 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { createClass, getClasses, getMeeting, replaceStudents, updateClassTeachers } from "../../services/meetingService";
+import {
+  createClass,
+  createRoom,
+  deleteRoom,
+  getClasses,
+  getMeeting,
+  getRooms,
+  replaceStudents,
+  updateClassTeachers,
+  updateRoom,
+} from "../../services/meetingService";
 import {
   CLASS_ROSTER_TEMPLATE_CSV,
   STUDENT_ROSTER_TEMPLATE_CSV,
@@ -18,9 +28,11 @@ export default function AdminMeetingDetail() {
   const studentFileRef = useRef(null);
   const [meeting, setMeeting] = useState(null);
   const [classes, setClasses] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [roomDraft, setRoomDraft] = useState({ name: "", floor: "" });
 
   useEffect(() => {
     refresh();
@@ -30,12 +42,18 @@ export default function AdminMeetingDetail() {
   async function refresh() {
     try {
       setError("");
-      const [meetingData, classData] = await Promise.all([getMeeting(meetingId), getClasses(meetingId)]);
+      const [meetingData, classData, roomData] = await Promise.all([
+        getMeeting(meetingId),
+        getClasses(meetingId),
+        getRooms(meetingId),
+      ]);
       setMeeting(meetingData);
       setClasses(classData);
+      setRooms(roomData);
     } catch {
       setMeeting(null);
       setClasses([]);
+      setRooms([]);
       setError("Toplantı yüklenemedi.");
     }
   }
@@ -164,6 +182,33 @@ export default function AdminMeetingDetail() {
     );
   }
 
+  function updateRoomField(roomId, field, value) {
+    setRooms((previous) =>
+      previous.map((room) => (room.id !== roomId ? room : { ...room, [field]: value }))
+    );
+  }
+
+  async function saveRoom(room) {
+    await updateRoom(meetingId, room.id, room);
+    setMessage(`${room.name || "Oda"} kaydedildi.`);
+    await refresh();
+  }
+
+  async function addRoom() {
+    const name = String(roomDraft.name || "").trim();
+    if (!name) return;
+    await createRoom(meetingId, { name, floor: roomDraft.floor || "" });
+    setRoomDraft({ name: "", floor: "" });
+    setMessage(`${name} eklendi.`);
+    await refresh();
+  }
+
+  async function removeRoom(roomId) {
+    await deleteRoom(meetingId, roomId);
+    setMessage("Oda silindi.");
+    await refresh();
+  }
+
   function addTeacherRow(classId) {
     setClasses((previous) =>
       previous.map((classItem) => {
@@ -267,6 +312,57 @@ export default function AdminMeetingDetail() {
       {message ? <div style={styles.notice}>{message}</div> : null}
       {error ? <div style={styles.error}>{error}</div> : null}
 
+      <section style={styles.roomCard}>
+        <div style={styles.roomHead}>
+          <div>
+            <h3 style={styles.cardTitle}>Odalar</h3>
+            <p style={styles.cardText}>Odaları burada tanımlayın. Öğretmenler sınıflardan ayrı oda seçer.</p>
+          </div>
+          <div style={styles.roomAddRow}>
+            <input
+              value={roomDraft.name}
+              onChange={(event) => setRoomDraft((prev) => ({ ...prev, name: event.target.value }))}
+              placeholder="Oda adı"
+              style={styles.teacherInput}
+            />
+            <input
+              value={roomDraft.floor}
+              onChange={(event) => setRoomDraft((prev) => ({ ...prev, floor: event.target.value }))}
+              placeholder="Kat"
+              style={styles.teacherInput}
+            />
+            <button type="button" onClick={addRoom} style={styles.primaryButtonSmall}>
+              Oda ekle
+            </button>
+          </div>
+        </div>
+        <div style={styles.roomList}>
+          {rooms.map((room) => (
+            <div key={room.id} style={styles.roomItem}>
+              <input
+                value={room.name || ""}
+                onChange={(event) => updateRoomField(room.id, "name", event.target.value)}
+                placeholder="Oda adı"
+                style={styles.teacherInput}
+              />
+              <input
+                value={room.floor || ""}
+                onChange={(event) => updateRoomField(room.id, "floor", event.target.value)}
+                placeholder="Kat"
+                style={styles.teacherInput}
+              />
+              <button type="button" onClick={() => saveRoom(room)} style={styles.secondaryButtonSmall}>
+                Kaydet
+              </button>
+              <button type="button" onClick={() => removeRoom(room.id)} style={styles.linkButton}>
+                Sil
+              </button>
+            </div>
+          ))}
+          {!rooms.length ? <p style={styles.cardText}>Henüz oda tanımlanmadı.</p> : null}
+        </div>
+      </section>
+
       <section style={styles.grid}>
         {classStats.map((classItem) => (
           <article key={classItem.id} style={styles.card}>
@@ -298,10 +394,38 @@ export default function AdminMeetingDetail() {
                     />
                     <input
                       value={teacher.room || ""}
-                      onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "room", event.target.value)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        const selected = rooms.find((room) => room.name === value || room.id === value);
+                        setClasses((previous) =>
+                          previous.map((item) => {
+                            if (item.id !== classItem.id) return item;
+                            return {
+                              ...item,
+                              teachers: (item.teachers || []).map((current) =>
+                                current.id !== teacher.id
+                                  ? current
+                                  : {
+                                      ...current,
+                                      room: value,
+                                      roomId: selected?.id || "",
+                                    }
+                              ),
+                            };
+                          })
+                        );
+                      }}
                       placeholder="Oda"
                       style={styles.teacherInput}
+                      list={`room-list-${classItem.id}`}
                     />
+                    <datalist id={`room-list-${classItem.id}`}>
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.name}>
+                          {room.name}
+                        </option>
+                      ))}
+                    </datalist>
                     <input
                       value={teacher.floor || ""}
                       onChange={(event) => updateClassTeacherField(classItem.id, teacher.id, "floor", event.target.value)}
@@ -493,6 +617,36 @@ const styles = {
   grid: {
     display: "grid",
     gap: 14,
+  },
+  roomCard: {
+    background: "#fff",
+    borderRadius: 22,
+    padding: 20,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+    display: "grid",
+    gap: 14,
+  },
+  roomHead: {
+    display: "grid",
+    gap: 12,
+  },
+  roomAddRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto",
+    gap: 10,
+    alignItems: "center",
+  },
+  roomList: {
+    display: "grid",
+    gap: 10,
+  },
+  roomItem: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr) auto auto",
+    gap: 10,
+    alignItems: "center",
+    paddingTop: 10,
+    borderTop: "1px solid #f1f5f9",
   },
   card: {
     background: "#fff",
