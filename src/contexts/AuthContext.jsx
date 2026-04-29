@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { auth, db, doc, getDoc, isFirebaseConfigured } from "../firebase";
 import { hasFullSchoolSeed, seedDemoSchoolData } from "../services/demoSeed";
+import { setDoc } from "firebase/firestore";
 
 const AuthContext = createContext(null);
 const DEMO_STORAGE_KEY = "veli_toplantisi_demo_user";
@@ -116,14 +117,30 @@ export function AuthProvider({ children }) {
     }
     const tempAccount = tempAccountForLogin(email, password);
     if (tempAccount) {
+      let credential;
       try {
-        return await signInWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
+        credential = await signInWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
       } catch (err) {
         if (err?.code !== "auth/user-not-found" && err?.code !== "auth/invalid-credential") {
           throw err;
         }
-        return createUserWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
+        credential = await createUserWithEmailAndPassword(auth, tempAccount.email, tempAccount.password);
       }
+
+      if (credential?.user) {
+        await setDoc(
+          doc(db, "users", credential.user.uid),
+          {
+            email: credential.user.email || tempAccount.email,
+            displayName: tempAccount.role === "admin" ? "Local Admin" : "Local Front Desk",
+            role: tempAccount.role,
+            temp: true,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+      return credential;
     }
     return signInWithEmailAndPassword(auth, email, password);
   }, []);

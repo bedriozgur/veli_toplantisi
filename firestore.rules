@@ -40,7 +40,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin() || (signedIn() && request.auth.uid == uid && (isTempAdminEmail() || isTempFrontDeskEmail()));
+      allow delete: if isAdmin();
     }
 
     match /meetings/{meetingId} {
