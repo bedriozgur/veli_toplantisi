@@ -494,6 +494,21 @@ export default function App() {
     classes,
     students,
   });
+
+  useEffect(() => {
+    if (!cloudReady) return undefined;
+    if (mode !== "admin" && mode !== "frontdesk") return undefined;
+    if (!eventCode.trim()) return undefined;
+
+    const timer = setTimeout(() => {
+      publishEvent(eventCode.trim().toUpperCase(), currentEvent).catch((error) => {
+        setPublishState(String(error?.message || error));
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [cloudReady, mode, eventCode, currentEvent]);
+
   const eventUrl =
     cloudReady && eventCode
       ? `${window.location.href.split("#")[0]}#eventCode=${encodeURIComponent(eventCode)}`
