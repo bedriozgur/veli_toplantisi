@@ -260,11 +260,11 @@ export default function AdminMeetingDetail() {
           </p>
         </div>
 
-          <div style={styles.heroMeta}>
-            <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>{t("admin.detailRole")}</span>
-              <strong>{currentUser?.email || t("admin.detailSession")}</strong>
-            </div>
+        <div style={styles.heroMeta}>
+          <div style={styles.metaCard}>
+            <span style={styles.metaLabel}>{t("admin.detailRole")}</span>
+            <strong>{currentUser?.email || t("admin.detailSession")}</strong>
+          </div>
           <div style={styles.metaCard}>
             <span style={styles.metaLabel}>{t("admin.detailClassCount")}</span>
             <strong>{classes.length}</strong>
@@ -273,10 +273,6 @@ export default function AdminMeetingDetail() {
               <span style={styles.metaLabel}>{t("parent.meetingCode")}</span>
               <strong>{meeting.meetingCode || t("admin.detailNone")}</strong>
             </div>
-            <QrBlock
-              label={t("admin.detailMeetingQr")}
-              value={buildParentRoute(meeting.meetingCode)}
-            />
           </div>
         </section>
 
@@ -337,6 +333,35 @@ export default function AdminMeetingDetail() {
                 <option value="closed">closed</option>
               </select>
             </label>
+          </div>
+
+          <div style={styles.qrSection}>
+            <div style={styles.sectionHead}>
+              <div>
+                <h3 style={styles.cardTitle}>{t("admin.detailQrSection")}</h3>
+                <p style={styles.cardText}>{t("admin.detailQrHelp")}</p>
+              </div>
+            </div>
+            <div style={styles.qrGrid}>
+              <QrBlock
+                label={t("admin.detailMeetingQr")}
+                value={buildParentRoute(meeting.meetingCode)}
+                copyText={meeting.meetingCode || ""}
+                copyLabel={t("admin.detailCopyCode")}
+                copiedLabel={t("admin.detailCopied")}
+              />
+              {classes.map((classItem) => (
+                <QrBlock
+                  key={classItem.id}
+                  label={`${t("admin.detailClassQr")} · ${classItem.classLabel || classItem.id}`}
+                  value={buildParentRoute(classItem.accessCode)}
+                  copyText={classItem.accessCode || ""}
+                  compact
+                  copyLabel={t("admin.detailCopyCode")}
+                  copiedLabel={t("admin.detailCopied")}
+                />
+              ))}
+            </div>
           </div>
 
           <div>
@@ -609,8 +634,9 @@ function buildParentRoute(code) {
   return `${window.location.origin}/parent/${code}`;
 }
 
-function QrBlock({ label, value, compact = false }) {
+function QrBlock({ label, value, copyText = "", compact = false, copyLabel = "Copy code", copiedLabel = "Copied" }) {
   const [src, setSrc] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -642,11 +668,24 @@ function QrBlock({ label, value, compact = false }) {
 
   if (!value) return null;
 
+  async function copyValue() {
+    try {
+      await navigator.clipboard.writeText(copyText || value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <div style={compact ? styles.qrCompactCard : styles.qrCard}>
       <span style={compact ? styles.qrLabelCompact : styles.qrLabel}>{label}</span>
       {src ? <img src={src} alt={label} style={compact ? styles.qrCompactImage : styles.qrImage} /> : <div style={compact ? styles.qrLoadingCompact : styles.qrLoading}>...</div>}
       <small style={compact ? styles.qrValueCompact : styles.qrValue}>{value}</small>
+      <button type="button" onClick={copyValue} style={compact ? styles.qrCopySmall : styles.qrCopy}>
+        {copied ? copiedLabel : copyLabel}
+      </button>
     </div>
   );
 }
@@ -830,6 +869,35 @@ const styles = {
     fontSize: 12,
     fontWeight: 600,
     wordBreak: "break-all",
+  },
+  qrCopy: {
+    border: "none",
+    borderRadius: 999,
+    padding: "0.55rem 0.8rem",
+    background: "#fff",
+    color: "#1d4ed8",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  qrCopySmall: {
+    border: "none",
+    borderRadius: 999,
+    padding: "0.5rem 0.75rem",
+    background: "#1d4ed8",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  qrSection: {
+    display: "grid",
+    gap: 12,
+    paddingTop: 8,
+    borderTop: "1px solid #e5e7eb",
+  },
+  qrGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
   },
   tabs: {
     display: "flex",
