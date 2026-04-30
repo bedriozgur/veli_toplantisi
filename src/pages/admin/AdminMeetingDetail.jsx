@@ -269,12 +269,19 @@ export default function AdminMeetingDetail() {
             <span style={styles.metaLabel}>{t("admin.detailClassCount")}</span>
             <strong>{classes.length}</strong>
           </div>
-            <div style={styles.metaCard}>
-              <span style={styles.metaLabel}>{t("parent.meetingCode")}</span>
-              <strong>{meeting.meetingCode || t("admin.detailNone")}</strong>
-            </div>
+          <div style={styles.metaCard}>
+            <span style={styles.metaLabel}>{t("parent.meetingCode")}</span>
+            <strong>{meeting.meetingCode || t("admin.detailNone")}</strong>
           </div>
-        </section>
+          <QrBlock
+            label={t("admin.detailMeetingQr")}
+            value={buildParentRoute(meeting.meetingCode)}
+            copyText={meeting.meetingCode || ""}
+            copyLabel={t("admin.detailCopyCode")}
+            copiedLabel={t("admin.detailCopied")}
+          />
+        </div>
+      </section>
 
       <div style={styles.tabs}>
         <button type="button" onClick={() => setActiveTab("settings")} style={tabStyle(activeTab === "settings")}>
@@ -333,35 +340,6 @@ export default function AdminMeetingDetail() {
                 <option value="closed">closed</option>
               </select>
             </label>
-          </div>
-
-          <div style={styles.qrSection}>
-            <div style={styles.sectionHead}>
-              <div>
-                <h3 style={styles.cardTitle}>{t("admin.detailQrSection")}</h3>
-                <p style={styles.cardText}>{t("admin.detailQrHelp")}</p>
-              </div>
-            </div>
-            <div style={styles.qrGrid}>
-              <QrBlock
-                label={t("admin.detailMeetingQr")}
-                value={buildParentRoute(meeting.meetingCode)}
-                copyText={meeting.meetingCode || ""}
-                copyLabel={t("admin.detailCopyCode")}
-                copiedLabel={t("admin.detailCopied")}
-              />
-              {classes.map((classItem) => (
-                <QrBlock
-                  key={classItem.id}
-                  label={`${t("admin.detailClassQr")} · ${classItem.classLabel || classItem.id}`}
-                  value={buildParentRoute(classItem.accessCode)}
-                  copyText={classItem.accessCode || ""}
-                  compact
-                  copyLabel={t("admin.detailCopyCode")}
-                  copiedLabel={t("admin.detailCopied")}
-                />
-              ))}
-            </div>
           </div>
 
           <div>
@@ -630,8 +608,16 @@ function buildTeacherSummary(teacher, t) {
 
 function buildParentRoute(code) {
   if (!code) return "";
-  if (typeof window === "undefined") return `/parent/${code}`;
-  return `${window.location.origin}/parent/${code}`;
+  return `${getQrOrigin()}/parent/${code}`;
+}
+
+function getQrOrigin() {
+  if (typeof window === "undefined") return "https://veli-toplantisi.web.app";
+  const origin = window.location.origin;
+  if (/localhost|127\.0\.0\.1|0\.0\.0\.0/.test(origin)) {
+    return "https://veli-toplantisi.web.app";
+  }
+  return origin;
 }
 
 function QrBlock({ label, value, copyText = "", compact = false, copyLabel = "Copy code", copiedLabel = "Copied" }) {
